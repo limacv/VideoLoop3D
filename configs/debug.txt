@@ -1,0 +1,22 @@
+gpu_num = 1
+# Dataset related
+expname = debug
+datadir = M:\VideoLoops\fern
+expdir  = M:\VideoLoops\logs
+factor = 8
+frm_num = 120
+seed = 2
+
+# Training related
+batch_size = 128
+lrate = 1
+
+sparsity_loss_weight = 1
+sigma_activate = volsdf
+
+i_img = 10000000000
+i_print = 1
+i_weight = 10000000000
+i_testset = 1000000000
+i_eval = 1000000000
+i_video = 1

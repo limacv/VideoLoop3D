@@ -1,0 +1,324 @@
+import os
+import imageio
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision.utils import save_image
+from torchvision.transforms import GaussianBlur
+
+img2mse = lambda x, y: torch.mean((x - y) ** 2)
+mse2psnr = lambda x: -10. * torch.log(x) / torch.log(torch.Tensor([10.]))
+to8b = lambda x: (255 * np.clip(x, 0, 1)).astype(np.uint8)
+
+
+def xyz2uv_stereographic(xyz: torch.Tensor, normalized=False):
+    """
+    xyz: tensor of size (B, 3)
+    """
+    if not normalized:
+        xyz = xyz / xyz.norm(dim=-1, keepdim=True)
+    x, y, z = torch.split(xyz, 1, dim=-1)
+    z = torch.clamp_max(z, 0.99)
+    denorm = torch.reciprocal(-z + 1)
+    u, v = x * denorm, y * denorm
+    return torch.cat([u, v], dim=-1)
+
+
+def uv2xyz_stereographic(uv: torch.Tensor):
+    u, v = torch.split(uv, 1, dim=-1)
+    u2v2 = u ** 2 + v ** 2
+    x = u * 2 / (u2v2 + 1)
+    y = v * 2 / (u2v2 + 1)
+    z = (u2v2 - 1) / (u2v2 + 1)
+    return torch.cat([x, y, z], dim=-1)
+
+
+def get_rays_np(H, W, K, c2w):
+    i, j = np.meshgrid(np.arange(W, dtype=np.float32), np.arange(H, dtype=np.float32), indexing='xy')
+    pixelpoints = np.stack([i, j, np.ones_like(i)], -1)[..., np.newaxis]
+    localpoints = np.linalg.inv(K) @ pixelpoints
+
+    rays_d = (c2w[:3, :3] @ localpoints)[..., 0]
+    rays_o = np.broadcast_to(c2w[:3, -1], np.shape(rays_d))
+    return rays_o, rays_d
+
+
+def get_rays_tensor(H, W, K, c2w):
+    i, j = torch.meshgrid(torch.linspace(0, W - 1, W), torch.linspace(0, H - 1, H))
+    i = i.t()
+    j = j.t()
+
+    pixelpoints = torch.stack([i, j, torch.ones_like(i)], -1).unsqueeze(-1)
+    localpoints = torch.matmul(torch.inverse(K), pixelpoints)
+
+    rays_d = torch.matmul(c2w[:3, :3], localpoints)[..., 0]
+    rays_o = c2w[:3, -1].expand(rays_d.shape)
+    return rays_o, rays_d
+
+
+def get_new_intrin(old_intrin, new_h_start, new_w_start):
+    new_intrin = old_intrin.clone() if isinstance(old_intrin, torch.Tensor) else old_intrin.copy()
+    new_intrin[..., 0, 2] -= new_w_start
+    new_intrin[..., 1, 2] -= new_h_start
+    return new_intrin
+
+
+def pose2extrin_np(pose: np.ndarray):
+    if pose.shape[-2] == 3:
+        bottom = pose[..., :1, :].copy()
+        bottom[..., :] = [0, 0, 0, 1]
+        pose = np.concatenate([pose, bottom], axis=-2)
+    return np.linalg.inv(pose)
+
+
+def pose2extrin_torch(pose):
+    if pose.shape[-2] == 3:
+        bottom = pose[..., :1, :].detach().clone()
+        bottom[..., :] = torch.tensor([0, 0, 0, 1.])
+        pose = torch.cat([pose, bottom], dim=-2)
+    return torch.inverse(pose)
+
+
+def raw2poses(rot_raw, tran_raw, intrin_raw):
+    x = rot_raw[..., 0]
+    x = x / torch.norm(x, dim=-1, keepdim=True)
+    z = torch.cross(x, rot_raw[..., 1])
+    z = z / torch.norm(z, dim=-1, keepdim=True)
+    y = torch.cross(z, x)
+    rot = torch.stack([x, y, z], dim=-1)
+    pose = torch.cat([rot, tran_raw[..., None]], dim=-1)
+    bottom = torch.tensor([0, 0, 1]).type_as(intrin_raw).reshape(-1, 1, 3).expand(len(intrin_raw), -1, -1)
+    intrinsic = torch.cat([intrin_raw, bottom], dim=1)
+    return pose, intrinsic
+
+
+def get_batched_rays_tensor(H, W, Ks, c2ws):
+    i, j = torch.meshgrid(torch.linspace(0, W - 1, W), torch.linspace(0, H - 1, H))
+    i = i.t()
+    j = j.t()
+
+    pixelpoints = torch.stack([i, j, torch.ones_like(i)], -1)[None, ..., None]
+    localpoints = torch.matmul(torch.inverse(Ks)[:, None, None, ...], pixelpoints)
+
+    rays_d = torch.matmul(c2ws[:, None, None, :3, :3], localpoints)[..., 0]
+    rays_o = c2ws[:, None, None, :3, -1].expand(rays_d.shape)
+    return torch.stack([rays_o, rays_d], dim=1)
+
+
+def sample_pdf(bins, weights, N_samples, det=False, pytest=False):
+    # Get pdf
+    weights = weights + 1e-5  # prevent nans
+    pdf = weights / torch.sum(weights, -1, keepdim=True)
+    cdf = torch.cumsum(pdf, -1)
+    cdf = torch.cat([torch.zeros_like(cdf[..., :1]), cdf], -1)  # (batch, len(bins))
+
+    # Take uniform samples
+    if det:
+        u = torch.linspace(0., 1., steps=N_samples)
+        u = u.expand(list(cdf.shape[:-1]) + [N_samples])
+    else:
+        u = torch.rand(list(cdf.shape[:-1]) + [N_samples])
+
+    # Pytest, overwrite u with numpy's fixed random numbers
+    if pytest:
+        np.random.seed(0)
+        new_shape = list(cdf.shape[:-1]) + [N_samples]
+        if det:
+            u = np.linspace(0., 1., N_samples)
+            u = np.broadcast_to(u, new_shape)
+        else:
+            u = np.random.rand(*new_shape)
+        u = torch.Tensor(u)
+
+    # Invert CDF
+    u = u.contiguous()
+    inds = torch.searchsorted(cdf, u, right=True)
+    below = torch.max(torch.zeros_like(inds - 1), inds - 1)
+    above = torch.min((cdf.shape[-1] - 1) * torch.ones_like(inds), inds)
+    inds_g = torch.stack([below, above], -1)  # (batch, N_samples, 2)
+
+    # cdf_g = tf.gather(cdf, inds_g, axis=-1, batch_dims=len(inds_g.shape)-2)
+    # bins_g = tf.gather(bins, inds_g, axis=-1, batch_dims=len(inds_g.shape)-2)
+    matched_shape = [inds_g.shape[0], inds_g.shape[1], cdf.shape[-1]]
+    cdf_g = torch.gather(cdf.unsqueeze(1).expand(matched_shape), 2, inds_g)
+    bins_g = torch.gather(bins.unsqueeze(1).expand(matched_shape), 2, inds_g)
+
+    denom = (cdf_g[..., 1] - cdf_g[..., 0])
+    denom = torch.where(denom < 1e-5, torch.ones_like(denom), denom)
+    t = (u - cdf_g[..., 0]) / denom
+    samples = bins_g[..., 0] + t * (bins_g[..., 1] - bins_g[..., 0])
+
+    return samples
+
+
+def smart_load_state_dict(model: nn.Module, state_dict: dict):
+    if isinstance(model, nn.DataParallel):
+        model = model.module
+
+    model.load_state_dict(state_dict)
+
+
+def gaussian(img, kernel_size):
+    return GaussianBlur(kernel_size)(img)
+
+
+# visualize the flow
+# ======================================================================================
+max_flow_thresh = 1e10
+
+
+def make_color_wheel():
+    """
+    Generate color wheel according Middlebury color code
+    :return: Color wheel
+    """
+    RY = 15
+    YG = 6
+    GC = 4
+    CB = 11
+    BM = 13
+    MR = 6
+
+    ncols = RY + YG + GC + CB + BM + MR
+
+    colorwheel = np.zeros([ncols, 3])
+
+    col = 0
+
+    # RY
+    colorwheel[0:RY, 0] = 255
+    colorwheel[0:RY, 1] = np.transpose(np.floor(255 * np.arange(0, RY) / RY))
+    col += RY
+
+    # YG
+    colorwheel[col:col + YG, 0] = 255 - np.transpose(np.floor(255 * np.arange(0, YG) / YG))
+    colorwheel[col:col + YG, 1] = 255
+    col += YG
+
+    # GC
+    colorwheel[col:col + GC, 1] = 255
+    colorwheel[col:col + GC, 2] = np.transpose(np.floor(255 * np.arange(0, GC) / GC))
+    col += GC
+
+    # CB
+    colorwheel[col:col + CB, 1] = 255 - np.transpose(np.floor(255 * np.arange(0, CB) / CB))
+    colorwheel[col:col + CB, 2] = 255
+    col += CB
+
+    # BM
+    colorwheel[col:col + BM, 2] = 255
+    colorwheel[col:col + BM, 0] = np.transpose(np.floor(255 * np.arange(0, BM) / BM))
+    col += + BM
+
+    # MR
+    colorwheel[col:col + MR, 2] = 255 - np.transpose(np.floor(255 * np.arange(0, MR) / MR))
+    colorwheel[col:col + MR, 0] = 255
+
+    return colorwheel
+
+
+def compute_color(u, v):
+    """
+    compute optical flow color map
+    :param u: optical flow horizontal map
+    :param v: optical flow vertical map
+    :return: optical flow in color code
+    """
+    [h, w] = u.shape
+    img = np.zeros([h, w, 3])
+    nanIdx = np.isnan(u) | np.isnan(v)
+    u[nanIdx] = 0
+    v[nanIdx] = 0
+
+    colorwheel = make_color_wheel()
+    ncols = np.size(colorwheel, 0)
+
+    rad = np.sqrt(u ** 2 + v ** 2)
+
+    a = np.arctan2(-v, -u) / np.pi
+
+    fk = (a + 1) / 2 * (ncols - 1) + 1
+
+    k0 = np.floor(fk).astype(int)
+
+    k1 = k0 + 1
+    k1[k1 == ncols + 1] = 1
+    f = fk - k0
+
+    for i in range(0, np.size(colorwheel, 1)):
+        tmp = colorwheel[:, i]
+        col0 = tmp[k0 - 1] / 255
+        col1 = tmp[k1 - 1] / 255
+        col = (1 - f) * col0 + f * col1
+
+        idx = rad <= 1
+        col[idx] = 1 - rad[idx] * (1 - col[idx])
+        notidx = np.logical_not(idx)
+
+        col[notidx] *= 0.75
+        img[:, :, i] = np.uint8(np.floor(255 * col * (1 - nanIdx)))
+
+    return img
+
+
+def flow_to_png_middlebury(flow: np.ndarray, maxflow=None):
+    """
+    Convert flow into middlebury color code image
+    :param flow: optical flow map
+    :return: optical flow image in middlebury color
+    """
+    if flow.shape[-1] == 2:
+        u = flow[:, :, 0]
+        v = flow[:, :, 1]
+    elif flow.shape[0] == 2:
+        u = flow[0]
+        v = flow[1]
+    else:
+        raise ValueError(f"shape {flow.shape} doesn't like a flow")
+
+    idxUnknow = (abs(u) > max_flow_thresh) | (abs(v) > max_flow_thresh)
+    u[idxUnknow] = 0
+    v[idxUnknow] = 0
+
+    rad = np.sqrt(u ** 2 + v ** 2)
+    maxrad = max(-1, np.max(rad))
+    if maxflow is not None:
+        maxrad = maxflow
+
+    u = u / (maxrad + np.finfo(float).eps)
+    v = v / (maxrad + np.finfo(float).eps)
+
+    img = compute_color(u, v)
+
+    idx = np.repeat(idxUnknow[:, :, np.newaxis], 3, axis=2)
+    img[idx] = 0
+
+    return np.uint8(img)
+
+
+LEFT_EYE = [21, 25, 28, 31, 39, 40]
+RIGHT_EYE = [22, 24, 29, 30, 34, 37]
+NOSE = [12, 27, 33, 43, 49, 57, 56, 54, 55, 53]
+MOUTH = [66, 67, 68, 71, 70, 75, 78, 79]
+LEFT_EYEBROW = [14, 10, 8, 13, 17]
+RIGHT_EYEBROW = [15, 11, 9, 16, 18]
+FACE_OUT = [2, 0, 4, 7, 23, 48, 58, 69, 80, 88, 93, 90, 89,
+            3, 1, 5, 6, 26, 44, 65, 74, 82, 87, 92, 94, 91, 95]
+FACE_IN = [19, 36, 45, 59, 76, 81, 83,
+           20, 35, 52, 64, 77, 85, 84, 86,
+           60, 46, 32, 50, 61, 41, 72,
+           63, 47, 38, 51, 62, 42, 73]
+
+
+def get_colors():
+    color = np.zeros((96, 3), dtype=np.uint8)
+    color[LEFT_EYE] = (52, 152, 219)
+    color[RIGHT_EYE] = (41, 128, 185)
+    color[NOSE] = (230, 126, 34)
+    color[MOUTH] = (192, 57, 43)
+    color[LEFT_EYEBROW] = (253, 121, 168)
+    color[RIGHT_EYEBROW] = (232, 67, 147)
+    color[FACE_OUT] = (108, 92, 231)
+    color[FACE_IN] = (46, 204, 113)
+    return (color / 255).astype(np.float32)

@@ -1,0 +1,41 @@
+gpu_num = 1
+datadir = M:\NeRFtx\data_fixpose
+expdir  = M:\NeRFtx\exps
+expname = debug
+nerf_type = NeRFTemporal
+
+factor = 8
+batch_size = 32
+itertions_per_frm = 50
+frm_num = 120
+
+N_samples = 64
+N_importance = 64
+netdepth = 6
+netdepth_fine = 6
+multires = 8
+
+i_img = 10000000
+i_print = 10000000
+i_weight = 100000000
+i_testset = 1000000000
+i_video = 1
+use_viewdirs = True
+raw_noise_std = 1e0
+
+rgb_activate = none
+
+texture_map_channel = 32
+texture_map_resolution = 1024
+uv_map_face_roi = 0.5
+uv_batch_size = 1000
+
+time_multires = 7
+use_two_models_for_fine
+use_two_dmodels_for_fine
+ambient_slicing_dim = 2
+
+# model specific parameters
+time_embed_type = latent
+ambient_slicing_dim = 2
+latent_size = 256
