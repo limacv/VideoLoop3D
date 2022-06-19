@@ -1,16 +1,20 @@
 gpu_num = 1
 # Dataset related
-expname = fern_debug
+expname = fern_debug_sparsity_optimnormal
 datadir = /apdcephfs/private_leema/data/VideoLoops/fern/
 expdir  = /apdcephfs/private_leema/data/VideoLoops/logs
 factor = 8
 seed = 2
 
 # Training related
+N_iters = 4000
 batch_size = 256
 lrate = 0.1
+lrate_decay = 30
 
-# sparsity_loss_weight = 0.1
+sparsity_loss_weight = 0.1
+# optimize_depth = True
+optimize_normal = True
 
 i_img = 50
 i_print = 10

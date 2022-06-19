@@ -4,7 +4,27 @@ import numpy as np
 from typing import Union, Sequence, Tuple
 
 
-def overcompose(mpi: torch.Tensor, blendweight=None, ret_mask=False, blend_content=None) \
+def overcompose(mpi):
+    """
+    compose mpi back (-1) to front (0)
+    mpi: [B, H, W, 32, 4]
+    """
+    batchsz, num_plane, height, width, _ = mpi.shape
+    alpha = mpi[..., -1]  # alpha.shape == B x H x W x LayerNum
+
+    blendweight = torch.cumprod((- alpha + 1)[..., :-1], dim=-1)  # B x H x W x LayerNum-1
+    blendweight = torch.cat([
+        alpha[..., :1],
+        alpha[..., 1:] * blendweight
+        ], dim=-1)
+
+    content = mpi[..., :3]
+    rgb = (content * blendweight.unsqueeze(-1)).sum(dim=-2)
+
+    return rgb, blendweight
+
+
+def overcomposeNto0(mpi: torch.Tensor, blendweight=None, ret_mask=False, blend_content=None) \
         -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
     """
     compose mpi back to front
@@ -150,7 +170,7 @@ def compute_homography(src_extrin_4x4: torch.Tensor, src_intrin: torch.Tensor,
         so P1 = R @ P2 + d'^-1 t @ n'T @ P2 = (R + t @ n'^T @ R / (d - n^T @ t)) @ P2
     src_extrin/tar_extrin: [B, 3, 4] = [R | t]
     src_intrin/tar_intrin: [B, 3, 3]
-    normal: [B, 3] normal of plane in *reference space*
+    normal: [B, D, 3] normal of plane in *reference space*
     distances: [B, D] offset of plaen in *ref space*
         so the plane equation: n^T @ P1 = d  ==>  n'^T
     return: [B, D, 3, 3]
@@ -160,11 +180,11 @@ def compute_homography(src_extrin_4x4: torch.Tensor, src_intrin: torch.Tensor,
     # rotation = R1 @ R2^T
     # translation = (t1 - R1 @ R2^T @ t2)
     rotation, translation = pose[..., :3, :3], pose[..., :3, 3:].squeeze(-1)
-    distances_tar = -(normal.unsqueeze(-2) @ translation.unsqueeze(-1)).squeeze(-1) + distances
+    distances_tar = -(normal @ translation.unsqueeze(-1)).squeeze(-1) + distances
 
     # [..., 3, 3] -> [..., D, 3, 3]
     # multiply extra rotation because normal is in reference space
-    homo = rotation.unsqueeze(-3) + (translation.unsqueeze(-1) @ normal.unsqueeze(-2) @ rotation).unsqueeze(-3) \
+    homo = rotation.unsqueeze(-3) + (translation.unsqueeze(-1) @ normal.unsqueeze(-2) @ rotation.unsqueeze(-3)) \
            / distances_tar.unsqueeze(-1).unsqueeze(-1)
     homo = src_intrin.unsqueeze(-3) @ homo @ torch.inverse(tar_intrin.unsqueeze(-3))
     return homo
@@ -198,11 +218,11 @@ def render_newview(mpi: torch.Tensor, srcextrin: torch.Tensor, tarextrin: torch.
                                    planenormal, distance)
     if not ret_dispmap:
         mpi_warp = warp_homography(homos, mpi)
-        return overcompose(mpi_warp, ret_mask=ret_mask)
+        return overcomposeNto0(mpi_warp, ret_mask=ret_mask)
     else:
         mpi_warp, mpi_depth = warp_homography_withdepth(homos, mpi, distance)
         disparitys = estimate_disparity_torch(mpi_warp, mpi_depth)
-        return overcompose(mpi_warp, ret_mask=ret_mask), disparitys
+        return overcomposeNto0(mpi_warp, ret_mask=ret_mask), disparitys
 
 
 def warp_flow(content: torch.Tensor, flow: torch.Tensor, offset=None, pad_mode="zeros", mode="bilinear"):

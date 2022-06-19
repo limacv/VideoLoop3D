@@ -6,6 +6,15 @@ expdir  = M:\VideoLoops\logs
 factor = 8
 frm_num = 120
 seed = 2
+model_type = MPMesh
+
+mpi_h_scale = 1.4
+mpi_w_scale = 1.4
+mpi_h_verts = 12
+mpi_w_verts = 15
+mpi_d = 32
+atlas_grid_h = 4
+atlas_size_scale = 1
 
 # Training related
 batch_size = 128
@@ -13,6 +22,8 @@ lrate = 1
 
 sparsity_loss_weight = 1
 sigma_activate = volsdf
+optimize_depth = True
+optimize_normal = True
 
 i_img = 10000000000
 i_print = 1

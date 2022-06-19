@@ -111,10 +111,10 @@ def load_llff_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=Fal
     poses, bds, imgs = _load_data(basedir, factor=factor)  # factor=8 downsamples original imgs by 8x
     print('Loaded', basedir, bds.min(), bds.max())
     # for debug only
-    # selected_idx = [0, 1, 2, 9, 8, 7, 10, 11, 19, 18]
-    # imgs = imgs[..., selected_idx]
-    # poses = poses[..., selected_idx]
-    # bds = bds[..., selected_idx]
+    selected_idx = [0, 1, 2, 9, 8, 7, 10, 11, 19, 18]
+    imgs = imgs[..., selected_idx]
+    poses = poses[..., selected_idx]
+    bds = bds[..., selected_idx]
 
     # Correct rotation matrix ordering and move variable dim to axis 0
     poses = np.concatenate([poses[:, 1:2, :], poses[:, 0:1, :], -poses[:, 2:3, :], poses[:, 3:, :]], 1)

@@ -20,8 +20,22 @@ def config_parser():
                         help='the height of the stored MPI is <mpi_h_scale * H>')
     parser.add_argument("--mpi_w_scale", type=float, default=1.4,
                         help='the width of the stored MPI is <mpi_w_scale * W>')
+    parser.add_argument("--mpi_h_verts", type=int, default=12,
+                        help='the height of the stored MPI is <mpi_h_scale * H>')
+    parser.add_argument("--mpi_w_verts", type=int, default=15,
+                        help='the width of the stored MPI is <mpi_w_scale * W>')
     parser.add_argument("--mpi_d", type=int, default=64,
                         help='number of the MPI layer')
+    parser.add_argument("--atlas_grid_h", type=int, default=8,
+                        help='atlas_grid_h * atlas_grid_w == mpi_d')
+    parser.add_argument("--atlas_size_scale", type=float, default=1,
+                        help='atlas_size = mpi_d * H * W * atlas_size_scale')
+    parser.add_argument("--model_type", type=str, default="MPI",
+                        choices=["MPI", "MPMesh"])
+    parser.add_argument("--optimize_depth", action='store_true',
+                        help='if true, optimzing the depth of each plane')
+    parser.add_argument("--optimize_normal", action='store_true',
+                        help='if true, optimzing the normal of each plane')
 
     # training options
     parser.add_argument("--netdepth", type=int, default=8,
@@ -36,7 +50,7 @@ def config_parser():
                         help='number of pts sent through network in parallel, decrease if running out of memory')
     parser.add_argument("--lrate", type=float, default=5e-4, 
                         help='learning rate')
-    parser.add_argument("--lrate_decay", type=int, default=250, 
+    parser.add_argument("--lrate_decay", type=int, default=30,
                         help='exponential learning rate decay (in 1000 steps)')
     parser.add_argument("--no_reload", action='store_true', 
                         help='do not reload weights from saved ckpt')

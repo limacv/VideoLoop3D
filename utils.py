@@ -6,10 +6,59 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.utils import save_image
 from torchvision.transforms import GaussianBlur
+from pytorch3d.structures import Meshes
+from pytorch3d.renderer import rasterize_meshes
+
 
 img2mse = lambda x, y: torch.mean((x - y) ** 2)
 mse2psnr = lambda x: -10. * torch.log(x) / torch.log(torch.Tensor([10.]))
 to8b = lambda x: (255 * np.clip(x, 0, 1)).astype(np.uint8)
+
+
+class SimpleRasterizer(nn.Module):
+    def __init__(self, raster_settings=None):
+        """
+        max_faces_per_bin = int(max(10000, meshes._F / 5))
+        """
+        super().__init__()
+        if raster_settings is None:
+            raster_settings = RasterizationSettings()
+        self.raster_settings = raster_settings
+
+    def forward(self, vertices, faces):
+        """
+        Args:
+            vertices: B, N, 3
+            faces: B, N, 3
+        """
+        raster_settings = self.raster_settings
+
+        # By default, turn on clip_barycentric_coords if blur_radius > 0.
+        # When blur_radius > 0, a face can be matched to a pixel that is outside the
+        # face, resulting in negative barycentric coordinates.
+        clip_barycentric_coords = raster_settings.clip_barycentric_coords
+        if clip_barycentric_coords is None:
+            clip_barycentric_coords = raster_settings.blur_radius > 0.0
+
+        # If not specified, infer perspective_correct and z_clip_value from the camera
+        perspective_correct = True
+        z_clip = raster_settings.z_clip_value
+        # z_clip should be set to >0 value if there are some meshes comming near the camera
+
+        pix_to_face, zbuf, bary_coords, dists = rasterize_meshes(
+            Meshes(vertices, faces),
+            image_size=raster_settings.image_size,
+            blur_radius=raster_settings.blur_radius,
+            faces_per_pixel=raster_settings.faces_per_pixel,
+            bin_size=raster_settings.bin_size,
+            max_faces_per_bin=raster_settings.max_faces_per_bin,
+            clip_barycentric_coords=clip_barycentric_coords,
+            perspective_correct=perspective_correct,
+            cull_backfaces=raster_settings.cull_backfaces,
+            z_clip_value=z_clip,
+            cull_to_frustum=raster_settings.cull_to_frustum,
+        )
+        return pix_to_face, zbuf, bary_coords, dists
 
 
 def xyz2uv_stereographic(xyz: torch.Tensor, normalized=False):
