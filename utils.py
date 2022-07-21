@@ -8,6 +8,7 @@ from torchvision.utils import save_image
 from torchvision.transforms import GaussianBlur
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer import rasterize_meshes
+from pytorch3d.renderer.mesh.rasterizer import Fragments
 
 
 img2mse = lambda x, y: torch.mean((x - y) ** 2)
@@ -45,7 +46,7 @@ class SimpleRasterizer(nn.Module):
         z_clip = raster_settings.z_clip_value
         # z_clip should be set to >0 value if there are some meshes comming near the camera
 
-        pix_to_face, zbuf, bary_coords, dists = rasterize_meshes(
+        fragment = rasterize_meshes(
             Meshes(vertices, faces),
             image_size=raster_settings.image_size,
             blur_radius=raster_settings.blur_radius,
@@ -58,7 +59,25 @@ class SimpleRasterizer(nn.Module):
             z_clip_value=z_clip,
             cull_to_frustum=raster_settings.cull_to_frustum,
         )
-        return pix_to_face, zbuf, bary_coords, dists
+        return Fragments(*fragment)  # pix_to_face, zbuf, bary_coords, dists
+
+
+class ParamsWithGradGain(nn.Module):
+    def __init__(self, param, grad_gain=1.):
+        super(ParamsWithGradGain, self).__init__()
+        if grad_gain == 0:
+            self.register_buffer("param", param)
+        else:
+            self.register_parameter("param", nn.Parameter(param, requires_grad=True))
+
+        def grad_gain_fn(grad):
+            return grad * grad_gain
+
+        if grad_gain != 1:
+            self.param.register_hook(grad_gain_fn)
+
+    def forward(self):
+        return self.param
 
 
 def xyz2uv_stereographic(xyz: torch.Tensor, normalized=False):

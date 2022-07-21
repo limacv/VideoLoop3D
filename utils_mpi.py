@@ -4,13 +4,13 @@ import numpy as np
 from typing import Union, Sequence, Tuple
 
 
-def overcompose(mpi):
+def overcompose(alpha, content):
     """
     compose mpi back (-1) to front (0)
-    mpi: [B, H, W, 32, 4]
+    alpha: [B, H, W, 32]
+    content: [B, H, W, 32, C]
     """
-    batchsz, num_plane, height, width, _ = mpi.shape
-    alpha = mpi[..., -1]  # alpha.shape == B x H x W x LayerNum
+    batchsz, num_plane, height, width, _ = content.shape
 
     blendweight = torch.cumprod((- alpha + 1)[..., :-1], dim=-1)  # B x H x W x LayerNum-1
     blendweight = torch.cat([
@@ -18,9 +18,7 @@ def overcompose(mpi):
         alpha[..., 1:] * blendweight
         ], dim=-1)
 
-    content = mpi[..., :3]
     rgb = (content * blendweight.unsqueeze(-1)).sum(dim=-2)
-
     return rgb, blendweight
 
 

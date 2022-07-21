@@ -36,6 +36,19 @@ def config_parser():
                         help='if true, optimzing the depth of each plane')
     parser.add_argument("--optimize_normal", action='store_true',
                         help='if true, optimzing the normal of each plane')
+    parser.add_argument("--optimize_geo_start", type=int, default=100000,
+                        help='iteration to start optimizing verts and uvs')
+    parser.add_argument("--optimize_verts_gain", type=float, default=1,
+                        help='set 0 to disable the vertices optimization')
+    parser.add_argument("--optimize_uvs_gain", type=float, default=1,
+                        help='set 0 to disable the uvs optimization')
+
+    parser.add_argument("--rgb_smooth_loss_weight", type=float, default=0,
+                        help='rgb smooth loss')
+    parser.add_argument("--a_smooth_loss_weight", type=float, default=0,
+                        help='rgb smooth loss')
+    parser.add_argument("--arap_loss_weight", type=float, default=0,
+                        help='as rigid as possible smooth loss')
 
     # training options
     parser.add_argument("--netdepth", type=int, default=8,

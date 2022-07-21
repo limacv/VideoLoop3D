@@ -204,15 +204,15 @@ def train():
             return
 
             # Prepare raybatch tensor if batching random rays
-    print('Begin', args.batch_size)
+    print('Begin', args.patch_size)
 
     start = start + 1
     N_iters = args.N_iters + 1
-    batch_size = args.batch_size
+    patch_size = args.patch_size
 
     # generate patch information
-    patch_h_start = np.arange(0, H, batch_size)
-    patch_w_start = np.arange(0, W, batch_size)
+    patch_h_start = np.arange(0, H, patch_size)
+    patch_w_start = np.arange(0, W, patch_size)
 
     patch_wh_start = np.meshgrid(patch_h_start, patch_w_start)
     patch_wh_start = np.stack(patch_wh_start[::-1], axis=-1).reshape(-1, 2)[None, ...]
@@ -227,8 +227,8 @@ def train():
     patch_wh_start = torch.tensor(patch_wh_start)
     view_index = torch.tensor(view_index).long()
 
-    H_pad = patch_h_start.max() + batch_size - H
-    W_pad = patch_w_start.max() + batch_size - W
+    H_pad = patch_h_start.max() + patch_size - H
+    W_pad = patch_w_start.max() + patch_size - W
     images = torch.tensor(images)
     images = torchf.pad(images.permute(0, 3, 1, 2), [0, W_pad, 0, H_pad])
 
@@ -257,14 +257,14 @@ def train():
         b_extrin = pose2extrin_torch(b_pose)
         b_intrin = intrins[view_idx]
         b_intrin_patch = get_new_intrin(b_intrin, h_start, w_start).float()
-        b_rgbs = torch.stack([images[v, :, hs: hs + batch_size, ws: ws + batch_size]
+        b_rgbs = torch.stack([images[v, :, hs: hs + patch_size, ws: ws + patch_size]
                               for v, hs, ws in zip(view_idx, h_start, w_start)])
 
         #####  Core optimization loop  #####
         nerf.train()
         if hasattr(nerf.module, "update_step"):
             nerf.module.update_step(global_step)
-        rgb, extra = nerf(batch_size, batch_size, b_extrin, b_intrin_patch)
+        rgb, extra = nerf(patch_size, patch_size, b_extrin, b_intrin_patch)
 
         # RGB loss
         img_loss = img2mse(rgb, b_rgbs)

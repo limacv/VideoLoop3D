@@ -5,16 +5,16 @@ import numpy as np
 import math
 import torch.nn as nn
 import time
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from MPI import *
 
-from configs import config_parser
 from dataloader import load_llff_data, poses_avg
 from utils import *
 import shutil
 from datetime import datetime
 from metrics import compute_img_metric
 import cv2
+import configargparse
 
 torch.set_default_tensor_type('torch.cuda.FloatTensor')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -32,6 +32,7 @@ def train():
         args.gpu_num = torch.cuda.device_count()
         print(f"Using {args.gpu_num} GPU(s)")
 
+    print(f"Training: {args.expname}")
     images, poses, intrins, bds, render_poses, render_intrins = load_llff_data(basedir=args.datadir,
                                                                                factor=args.factor,
                                                                                recenter=True)
@@ -44,6 +45,10 @@ def train():
     ref_extrin = pose2extrin_np(ref_pose)
     ref_intrin = intrins[0]
     ref_near, ref_far = bds[:, 0].min(), bds[:, 1].max()
+
+    # resolve scheduling
+    upsample_stage = list(map(int, args.upsample_stage.split(','))) if len(args.upsample_stage) > 0 else []
+    args.upsample_stage = upsample_stage
 
     # Summary writers
     writer = SummaryWriter(os.path.join(args.expdir, args.expname))
@@ -74,8 +79,16 @@ def train():
         raise RuntimeError(f"Unrecognized model type {args.model_type}")
 
     nerf = nn.DataParallel(nerf, list(range(args.gpu_num)))
-    optimizer = torch.optim.Adam(params=nerf.parameters(), lr=args.lrate, betas=(0.9, 0.999))
-    # optimizer = torch.optim.SGD(params=nerf.parameters(), lr=args.lrate, momentum=0.9)
+    if hasattr(nerf.module, "get_optimizer"):
+        print(f"Using {type(nerf)}'s get_optimizer()")
+        optimizer = nerf.module.get_optimizer()
+    else:
+        if args.optimizer == 'adam':
+            optimizer = torch.optim.Adam(params=nerf.parameters(), lr=args.lrate, betas=(0.9, 0.999))
+        elif args.optimizer == 'sgd':
+            optimizer = torch.optim.SGD(params=nerf.parameters(), lr=args.lrate, momentum=0.9)
+        else:
+            raise RuntimeError(f"Unrecongnized optimizer type {args.optimizer}")
 
     render_extrins = pose2extrin_np(render_poses)
     render_extrins = torch.tensor(render_extrins).float()
@@ -188,7 +201,7 @@ def train():
                         for i in range(len(texture_maps[0])):
                             texture_map = [ts[i] for ts in texture_maps]
                             imageio.mimwrite(savedir + f"/texture_{suffix}_{i}.mp4", texture_map,
-                                             fps=30, quality=10)
+                                             fps=30, quality=8)
 
                 if T > 1 and not args.render_test:
                     rH, rW = H * args.render_factor, W * args.render_factor
@@ -204,21 +217,22 @@ def train():
                     rgbs = rgbs.cpu().numpy()
                     disps = disps.cpu().numpy()
                     moviebase = os.path.join(savedir, f'{args.expname}_varyt_{render_time:06d}_')
-                    imageio.mimwrite(moviebase + f'rgb{suffix}.mp4', to8b(rgbs), fps=30, quality=10)
+                    imageio.mimwrite(moviebase + f'rgb{suffix}.mp4', to8b(rgbs), fps=30, quality=8)
                     imageio.mimwrite(moviebase + f'disp{suffix}.mp4', to8b(disps / np.max(disps)), fps=30,
-                                     quality=10)
+                                     quality=8)
             return
 
             # Prepare raybatch tensor if batching random rays
-    print('Begin', args.batch_size)
+    print('Begin')
 
     start = start + 1
     N_iters = args.N_iters + 1
-    batch_size = args.batch_size
+    patch_h_size = args.patch_h_size
+    patch_w_size = args.patch_w_size
 
     # generate patch information
-    patch_h_start = np.arange(0, H, batch_size)
-    patch_w_start = np.arange(0, W, batch_size)
+    patch_h_start = np.arange(0, H, patch_h_size)
+    patch_w_start = np.arange(0, W, patch_w_size)
 
     patch_wh_start = np.meshgrid(patch_h_start, patch_w_start)
     patch_wh_start = np.stack(patch_wh_start[::-1], axis=-1).reshape(-1, 2)[None, ...]
@@ -233,8 +247,8 @@ def train():
     patch_wh_start = torch.tensor(patch_wh_start)
     view_index = torch.tensor(view_index).long()
 
-    H_pad = patch_h_start.max() + batch_size - H
-    W_pad = patch_w_start.max() + batch_size - W
+    H_pad = patch_h_start.max() + patch_h_size - H
+    W_pad = patch_w_start.max() + patch_w_size - W
     images = torch.tensor(images)
     images = torchf.pad(images.permute(0, 3, 1, 2), [0, W_pad, 0, H_pad])
 
@@ -263,42 +277,54 @@ def train():
         b_extrin = pose2extrin_torch(b_pose)
         b_intrin = intrins[view_idx]
         b_intrin_patch = get_new_intrin(b_intrin, h_start, w_start).float()
-        b_rgbs = torch.stack([images[v, :, hs: hs + batch_size, ws: ws + batch_size]
+        b_rgbs = torch.stack([images[v, :, hs: hs + patch_h_size, ws: ws + patch_w_size]
                               for v, hs, ws in zip(view_idx, h_start, w_start)])
 
         #####  Core optimization loop  #####
         nerf.train()
         if hasattr(nerf.module, "update_step"):
             nerf.module.update_step(global_step)
-        rgb, extra = nerf(batch_size, batch_size, b_extrin, b_intrin_patch)
+
+        rgb, extra = nerf(patch_h_size, patch_w_size, b_extrin, b_intrin_patch)
 
         # RGB loss
         img_loss = img2mse(rgb, b_rgbs)
         psnr = mse2psnr(img_loss)
 
         # define extra losses here
-        if args.sparsity_loss_weight > 0:
-            sparsity_loss = extra["sparsity"].mean()
-            sparsity_weight_apply = args.sparsity_loss_weight
-        else:
-            sparsity_loss, sparsity_weight_apply = 0, 0
+        args_var = vars(args)
+        extra_losses = {}
+        for k, v in extra.items():
+            if args_var[f"{k}_loss_weight"] > 0:
+                extra_losses[k] = extra[k].mean() * args_var[f"{k}_loss_weight"]
 
-        loss = img_loss \
-                + sparsity_loss * sparsity_weight_apply
+        loss = img_loss
+        for v in extra_losses.values():
+            loss = loss + v
 
+        # old_vert = nerf.module.verts.detach().clone()
         optimizer.zero_grad()
         if args.optimize_poses and global_step >= args.optimize_poses_start:
             pose_optimizer.zero_grad()
         loss.backward()
+        if hasattr(nerf.module, "post_backward"):
+            nerf.module.post_backward()
         optimizer.step()
         if args.optimize_poses and global_step >= args.optimize_poses_start:
             pose_optimizer.step()
+        # delta_vert = (nerf.module.verts.detach() - old_vert).abs().max()
+        # print(f"max delta vert = {delta_vert.item()}")
 
         ###   update learning rate   ###
-        decay_rate = 0.1
-        decay_steps = args.lrate_decay * 1000
-        new_lrate = args.lrate * (decay_rate ** (global_step / decay_steps))
-        for param_group in optimizer.param_groups:
+        if hasattr(nerf.module, "get_lrate"):
+            name_lrates = nerf.module.get_lrate(global_step)
+        else:
+            decay_rate = 0.1
+            decay_steps = args.lrate_decay * 1000
+            new_lrate = args.lrate * (decay_rate ** (global_step / decay_steps))
+            name_lrates = [("lr", new_lrate)] * len(optimizer.param_groups)
+
+        for (lrname, new_lrate), param_group in zip(name_lrates, optimizer.param_groups):
             param_group['lr'] = new_lrate
 
         ################################
@@ -306,25 +332,36 @@ def train():
         if i % args.i_img == 0:
             writer.add_scalar('aloss/psnr', psnr, i)
             writer.add_scalar('aloss/mse_loss', loss, i)
-            writer.add_scalar('aloss/sparsity_loss', sparsity_loss, i)
-            writer.add_scalar('weight/lr', new_lrate, i)
+            for k, v in extra.items():
+                writer.add_scalar(f'{k}', float(v.mean()), i)
+            for name, newlr in name_lrates:
+                writer.add_scalar(f'lr/{name}', newlr, i)
 
         if i % args.i_print == 0:
-            print(f"[TRAIN] Iter: {i} Loss: {loss.item()} PSNR: {psnr.item()}")
+            print(f"[TRAIN] Iter: {i} Loss: {loss.item():.4f} PSNR: {psnr.item():.4f}",
+                  "|".join([f"{k}: {v.item():.4f}" for k, v in extra_losses.items()]))
 
         if i % args.i_weights == 0:
-            path = os.path.join(args.expdir, args.expname, '{:06d}.tar'.format(i))
-            save_dict = {
-                'global_step': global_step,
-                'network_state_dict': nerf.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-            }
-            if args.optimize_poses:
-                save_dict['rot_raw'] = rot_raw
-                save_dict['tran_raw'] = tran_raw
-                save_dict['intrin_raw'] = intrin_raw
-            torch.save(save_dict, path)
-            print('Saved checkpoints at', path)
+            if hasattr(nerf.module, "save_mesh"):
+                prefix = os.path.join(args.expdir, args.expname, f"mesh{i:06d}")
+                nerf.module.save_mesh(prefix)
+
+            if hasattr(nerf.module, "save_texture"):
+                prefix = os.path.join(args.expdir, args.expname, f"texture{i:06d}")
+                nerf.module.save_texture(prefix)
+
+            # path = os.path.join(args.expdir, args.expname, '{:06d}.tar'.format(i))
+            # save_dict = {
+            #     'global_step': global_step,
+            #     'network_state_dict': nerf.state_dict(),
+            #     'optimizer_state_dict': optimizer.state_dict(),
+            # }
+            # if args.optimize_poses:
+            #     save_dict['rot_raw'] = rot_raw
+            #     save_dict['tran_raw'] = tran_raw
+            #     save_dict['intrin_raw'] = intrin_raw
+            # torch.save(save_dict, path)
+            # print('Saved checkpoints at', path)
 
         if i % args.i_testset == 0:
             pass
@@ -350,9 +387,205 @@ def train():
                     rgbs.append(rgb)
 
                 rgbs = np.array(rgbs)
-                imageio.mimwrite(moviebase + '_rgb.mp4', to8b(rgbs), fps=30, quality=10)
+                imageio.mimwrite(moviebase + '_rgb.mp4', to8b(rgbs), fps=30, quality=8)
 
         global_step += 1
+
+
+def config_parser():
+    parser = configargparse.ArgumentParser()
+    parser.add_argument('--config', is_config_file=True,
+                        help='config file path')
+    parser.add_argument("--datadir", type=str,
+                        help='input data directory')
+    parser.add_argument("--expdir", type=str,
+                        help='where to store ckpts and logs')
+    parser.add_argument("--expname", type=str,
+                        help='experiment name')
+    parser.add_argument("--seed", type=int, default=666,
+                        help='random seed')
+
+    # for mpi
+    parser.add_argument("--mpi_h_scale", type=float, default=1.4,
+                        help='the height of the stored MPI is <mpi_h_scale * H>')
+    parser.add_argument("--mpi_w_scale", type=float, default=1.4,
+                        help='the width of the stored MPI is <mpi_w_scale * W>')
+    parser.add_argument("--mpi_h_verts", type=int, default=12,
+                        help='the height of the stored MPI is <mpi_h_scale * H>')
+    parser.add_argument("--mpi_w_verts", type=int, default=15,
+                        help='the width of the stored MPI is <mpi_w_scale * W>')
+    parser.add_argument("--mpi_d", type=int, default=64,
+                        help='number of the MPI layer')
+    parser.add_argument("--atlas_grid_h", type=int, default=8,
+                        help='atlas_grid_h * atlas_grid_w == mpi_d')
+    parser.add_argument("--atlas_size_scale", type=float, default=1,
+                        help='atlas_size = mpi_d * H * W * atlas_size_scale')
+    parser.add_argument("--model_type", type=str, default="MPI",
+                        choices=["MPI", "MPMesh"])
+    parser.add_argument("--optimize_depth", action='store_true',
+                        help='if true, optimzing the depth of each plane')
+    parser.add_argument("--optimize_normal", action='store_true',
+                        help='if true, optimzing the normal of each plane')
+    parser.add_argument("--optimize_geo_start", type=int, default=100000,
+                        help='iteration to start optimizing verts and uvs')
+    parser.add_argument("--optimize_verts_gain", type=float, default=1,
+                        help='set 0 to disable the vertices optimization')
+    parser.add_argument("--optimize_uvs_gain", type=float, default=1,
+                        help='set 0 to disable the uvs optimization')
+    parser.add_argument("--normalize_verts", action='store_true',
+                        help='if true, the parameter is normalized')
+
+    # about training
+    parser.add_argument("--upsample_stage", type=str, default="",
+                        help='x,y,z,...  stage to perform upsampling')
+    parser.add_argument("--rgb_smooth_loss_weight", type=float, default=0,
+                        help='rgb smooth loss')
+    parser.add_argument("--a_smooth_loss_weight", type=float, default=0,
+                        help='rgb smooth loss')
+    parser.add_argument("--d_smooth_loss_weight", type=float, default=0,
+                        help='depth smooth loss')
+    parser.add_argument("--laplacian_loss_weight", type=float, default=0,
+                        help='as rigid as possible smooth loss')
+
+    # training options
+    parser.add_argument("--optimizer", type=str, default='adam', choices=['adam', 'sgd'],
+                        help='optmizer')
+    parser.add_argument("--netdepth", type=int, default=8,
+                        help='layers in network')
+    parser.add_argument("--netwidth", type=int, default=256,
+                        help='channels per layer')
+    parser.add_argument("--patch_h_size", type=int, default=512,
+                        help='batch size (number of random rays per gradient step)')
+    parser.add_argument("--patch_w_size", type=int, default=512,
+                        help='batch size (number of random rays per gradient step)')
+    parser.add_argument("--chunk", type=int, default=1024*32,
+                        help='number of rays processed in parallel, decrease if running out of memory')
+    parser.add_argument("--netchunk", type=int, default=1024*64,
+                        help='number of pts sent through network in parallel, decrease if running out of memory')
+    parser.add_argument("--lrate", type=float, default=5e-4,
+                        help='learning rate')
+    parser.add_argument("--lrate_decay", type=int, default=30,
+                        help='exponential learning rate decay (in 1000 steps)')
+    parser.add_argument("--no_reload", action='store_true',
+                        help='do not reload weights from saved ckpt')
+
+    # rendering options
+    parser.add_argument("--N_iters", type=int, default=50000)
+    parser.add_argument("--N_samples", type=int, default=64,
+                        help='number of coarse samples per ray')
+    parser.add_argument("--N_importance", type=int, default=64,
+                        help='number of additional fine samples per ray')
+    parser.add_argument("--N_samples_fine", type=int, default=64,
+                        help='n sample fine = N_samples_fine + N_importance')
+    parser.add_argument("--perturb", type=float, default=1.,
+                        help='set to 0. for no jitter, 1. for jitter')
+    parser.add_argument("--use_viewdirs", type=bool, default=True,
+                        help='use full 5D input instead of 3D')
+    parser.add_argument("--i_embed", type=int, default=0,
+                        help='set 0 for default positional encoding, -1 for none')
+    parser.add_argument("--multires", type=int, default=10,
+                        help='log2 of max freq for positional encoding (3D location)')
+    parser.add_argument("--embed_type", type=str, default='pe',
+                        help='pe, none, hash, dict')
+    parser.add_argument("--log2_embed_hash_size", type=int, default=19,
+                        help='log2 of max freq for positional encoding (3D location)')
+    parser.add_argument("--multires_window_start", type=int, default=0,
+                        help='windowed PE start step')
+    parser.add_argument("--multires_window_end", type=int, default=-1,
+                        help='windowed PE end step, negative to disable')
+    parser.add_argument("--multires_views", type=int, default=4,
+                        help='log2 of max freq for positional encoding (2D direction)')
+    parser.add_argument("--multires_views_window_start", type=int, default=0,
+                        help='log2 of max freq for positional encoding (2D direction)')
+    parser.add_argument("--multires_views_window_end", type=int, default=-1,
+                        help='log2 of max freq for positional encoding (2D direction)')
+    parser.add_argument("--raw_noise_std", type=float, default=1e0,
+                        help='std dev of noise added to regularize sigma_a output, 1e0 recommended')
+    parser.add_argument("--render_only", action='store_true',
+                        help='do not optimize, reload weights and render out render_poses path')
+    parser.add_argument("--render_rgba", action='store_true',
+                        help='do not optimize, reload weights and render out render_poses path')
+    parser.add_argument("--render_texture", action='store_true',
+                        help='do not optimize, reload weights and render out render_poses path')
+    parser.add_argument("--render_view", type=int, default=-1,
+                        help='do not optimize, reload weights and render out render_poses path')
+    parser.add_argument("--render_test", action='store_true',
+                        help='do not optimize, reload weights and render out render_poses path')
+    parser.add_argument("--render_slice", action='store_true',
+                        help='do not optimize, reload weights and render out render_poses path')
+    parser.add_argument("--render_keypoints", action='store_true',
+                        help='change the keypoint location')
+    parser.add_argument("--render_deformed", type=str, default='',
+                        help='edited file')
+    parser.add_argument("--render_factor", type=float, default=1,
+                        help='change the keypoint location')
+    parser.add_argument("--render_canonical", action='store_true',
+                        help='if true, the DNeRF is like traditional NeRF')
+
+    ## data options
+    parser.add_argument("--factor", type=int, default=8,
+                        help='downsample factor for LLFF images')
+    parser.add_argument("--white_bkgd", action='store_true',
+                        help='set to render synthetic data on a white bkgd (always use for dvoxels)')
+
+    # logging options
+    parser.add_argument("--i_img",    type=int, default=300,
+                        help='frequency of tensorboard image logging')
+    parser.add_argument("--i_print",   type=int, default=300,
+                        help='frequency of console printout and metric loggin')
+    parser.add_argument("--i_weights", type=int, default=20000,
+                        help='frequency of weight ckpt saving')
+    parser.add_argument("--i_testset", type=int, default=20000,
+                        help='frequency of testset saving')
+    parser.add_argument("--i_eval", type=int, default=10000,
+                        help='frequency of testset saving')
+    parser.add_argument("--i_video",   type=int, default=10000,
+                        help='frequency of render_poses video saving')
+
+    # multiprocess learning
+    parser.add_argument("--gpu_num", type=int, default='-1', help='number of processes')
+
+    # test use latent_t
+    parser.add_argument("--render_chunk", type=int, default=1024,
+                        help='number of rays processed in parallel, decrease if running out of memory')
+
+    # MA Li in General
+    # ===================================
+    parser.add_argument("--frm_num", type=int, default=-1, help='number of frames to use')
+    parser.add_argument("--bd_factor", type=float, default=0.65, help='expand factor of the ROI box')
+    parser.add_argument("--optimize_poses", default=False, action='store_true',
+                        help='optimize poses')
+    parser.add_argument("--optimize_poses_start", type=int, default=0, help='start step of optimizing poses')
+    parser.add_argument("--surpress_boundary_thickness", type=int, default=0,
+                        help='do not supervise the boundary of thickness <>, 0 to disable')
+    parser.add_argument("--itertions_per_frm", type=int, default=50)
+    parser.add_argument("--masked_sample_precent", type=float, default=0.92,
+                        help="in batch_size samples, precent of the samples that are sampled at"
+                             "masked region, set to 1 to disable the samples on black region")
+    parser.add_argument("--rgb_activate", type=str, default='sigmoid',
+                        help='activate function for rgb output, choose among "none", "sigmoid"')
+    parser.add_argument("--sigma_activate", type=str, default='relu',
+                        help='activate function for sigma output, choose among "relu", "softplus",'
+                             '"volsdf"')
+    parser.add_argument("--use_raw2outputs_old", type=bool, default=True,
+                        help='use the original raw2output (not forcing the last layer to be alpha=1')
+    parser.add_argument("--use_two_models_for_fine", action='store_true',
+                        help='if true, nerf_coarse == nerf_fine')
+    parser.add_argument("--not_supervise_rgb0", action='store_true', default=False,
+                        help='if true, rgb0 well not considered as part of the loss')
+    parser.add_argument("--best_frame_idx", type=int, default=-1,
+                        help='if > 0, the first epoch will be trained only on this frame')
+
+    ## For other losses
+    parser.add_argument("--sparsity_type", type=str, default='none',
+                        help='sparsity loss type, choose among none, l1, l1/l2, entropy')
+    parser.add_argument("--sparsity_loss_weight", type=float, default=0,
+                        help='sparsity loss weight')
+    parser.add_argument("--sparsity_loss_start_step", type=float, default=50000,
+                        help='sparsity loss weight')
+    parser.add_argument("--use_two_time_for_cycle", type=bool, default=False,
+                        help='pe or latent')
+    return parser
 
 
 if __name__ == '__main__':
