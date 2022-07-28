@@ -1,0 +1,30 @@
+gpu_num = 1
+# Dataset related
+expname = debug
+datadir = M:\VideoLoops\HDbrink2_orig_down.mp4
+expdir  = M:\VideoLoops\videolog
+seed = 7777
+
+# Training related
+lrate = 1
+lrate_decay = 30
+N_iters = 6000
+pyr_stage = 1
+pyr_factor = 0.5
+patch_h_size = 288
+patch_w_size = 512
+patch_h_stride = 288
+patch_w_stride = 512
+
+rgb_activate = sigmoid
+
+# loss related
+swd_patch_size = 7
+swd_patcht_size = 7
+
+i_img = 10000000000
+i_print = 1
+i_weight = 100000000
+i_testset = 1000000000
+i_eval = 1000000000
+i_video = 1

@@ -1,0 +1,30 @@
+gpu_num = 1
+# Dataset related
+expname = simplevid_brink2down_nopry
+datadir = /apdcephfs/private_leema/data/VideoLoops/HDbrink2_orig_down.mp4
+expdir  = /apdcephfs/private_leema/data/VideoLoops/videolog
+seed = 7777
+
+# Training related
+lrate = 0.05
+lrate_decay = 1000
+N_iters = 8000
+# pyr_stage = 1000,2000,3000,4000,5000,6000,7000
+pyr_factor = 0.75
+patch_h_size = 288
+patch_w_size = 512
+patch_h_stride = 288
+patch_w_stride = 512
+
+rgb_activate = none
+
+# loss related
+swd_patch_size = 7
+swd_patcht_size = 7
+
+i_img = 30
+i_print = 5
+i_weight = 100000000
+i_testset = 1000000000
+i_eval = 1000000000
+i_video = 250

@@ -125,6 +125,19 @@ def get_rays_tensor(H, W, K, c2w):
     return rays_o, rays_d
 
 
+def get_rays_tensor_batches(H, W, K, c2w):
+    i, j = torch.meshgrid(torch.linspace(0, W - 1, W), torch.linspace(0, H - 1, H))
+    i = i.t()
+    j = j.t()
+
+    pixelpoints = torch.stack([i, j, torch.ones_like(i)], -1)[None, ..., None]
+    localpoints = torch.matmul(torch.inverse(K)[:, None, None], pixelpoints)
+
+    rays_d = torch.matmul(c2w[:, None, None, :3, :3], localpoints)[..., 0]
+    rays_o = c2w[:, :3, -1].expand(rays_d.shape)
+    return rays_o, rays_d
+
+
 def get_new_intrin(old_intrin, new_h_start, new_w_start):
     new_intrin = old_intrin.clone() if isinstance(old_intrin, torch.Tensor) else old_intrin.copy()
     new_intrin[..., 0, 2] -= new_w_start
@@ -141,6 +154,9 @@ def pose2extrin_np(pose: np.ndarray):
 
 
 def pose2extrin_torch(pose):
+    """
+    pose to extrin or extrin to pose (equivalent)
+    """
     if pose.shape[-2] == 3:
         bottom = pose[..., :1, :].detach().clone()
         bottom[..., :] = torch.tensor([0, 0, 0, 1.])

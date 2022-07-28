@@ -244,6 +244,11 @@ def load_images(imgpaths):
     return imglist
 
 
+def load_videos(vidpath, factor):  # todo: factor not implemented
+    vid = imageio.mimread(vidpath, memtest=False)
+    return vid
+
+
 def normalize(x):
     return x / np.linalg.norm(x)
 

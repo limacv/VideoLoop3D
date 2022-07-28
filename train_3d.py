@@ -404,7 +404,8 @@ def config_parser():
                         help='experiment name')
     parser.add_argument("--seed", type=int, default=666,
                         help='random seed')
-
+    parser.add_argument("--chunk", type=int, default=1024 * 32,
+                        help='number of rays processed in parallel, decrease if running out of memory')
     # for mpi
     parser.add_argument("--mpi_h_scale", type=float, default=1.4,
                         help='the height of the stored MPI is <mpi_h_scale * H>')
@@ -420,8 +421,16 @@ def config_parser():
                         help='atlas_grid_h * atlas_grid_w == mpi_d')
     parser.add_argument("--atlas_size_scale", type=float, default=1,
                         help='atlas_size = mpi_d * H * W * atlas_size_scale')
+    parser.add_argument("--atlas_cnl", type=int, default=4,
+                        help='channel num')
+    parser.add_argument("--multires_views", type=int, default=4,
+                        help='log2 of max freq for positional encoding (2D direction)')
     parser.add_argument("--model_type", type=str, default="MPI",
                         choices=["MPI", "MPMesh"])
+    parser.add_argument("--rgb_mlp_type", type=str, default='direct',
+                        help='mlp type, choose among "direct", "rgbamlp", "rgbmlp"')
+    parser.add_argument("--rgb_activate", type=str, default='sigmoid',
+                        help='activate function for rgb output, choose among "none", "sigmoid"')
     parser.add_argument("--optimize_depth", action='store_true',
                         help='if true, optimzing the depth of each plane')
     parser.add_argument("--optimize_normal", action='store_true',
@@ -458,8 +467,6 @@ def config_parser():
                         help='batch size (number of random rays per gradient step)')
     parser.add_argument("--patch_w_size", type=int, default=512,
                         help='batch size (number of random rays per gradient step)')
-    parser.add_argument("--chunk", type=int, default=1024*32,
-                        help='number of rays processed in parallel, decrease if running out of memory')
     parser.add_argument("--netchunk", type=int, default=1024*64,
                         help='number of pts sent through network in parallel, decrease if running out of memory')
     parser.add_argument("--lrate", type=float, default=5e-4,
@@ -493,8 +500,6 @@ def config_parser():
                         help='windowed PE start step')
     parser.add_argument("--multires_window_end", type=int, default=-1,
                         help='windowed PE end step, negative to disable')
-    parser.add_argument("--multires_views", type=int, default=4,
-                        help='log2 of max freq for positional encoding (2D direction)')
     parser.add_argument("--multires_views_window_start", type=int, default=0,
                         help='log2 of max freq for positional encoding (2D direction)')
     parser.add_argument("--multires_views_window_end", type=int, default=-1,
@@ -562,8 +567,6 @@ def config_parser():
     parser.add_argument("--masked_sample_precent", type=float, default=0.92,
                         help="in batch_size samples, precent of the samples that are sampled at"
                              "masked region, set to 1 to disable the samples on black region")
-    parser.add_argument("--rgb_activate", type=str, default='sigmoid',
-                        help='activate function for rgb output, choose among "none", "sigmoid"')
     parser.add_argument("--sigma_activate", type=str, default='relu',
                         help='activate function for sigma output, choose among "relu", "softplus",'
                              '"volsdf"')
