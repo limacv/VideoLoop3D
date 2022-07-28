@@ -6,58 +6,6 @@ import imageio
 import numpy as np
 
 
-def _minify(basedir, factors=[], resolutions=[]):
-    needtoload = False
-    for r in factors:
-        imgdir = os.path.join(basedir, 'images_{}'.format(r))
-        if not os.path.exists(imgdir):
-            needtoload = True
-    for r in resolutions:
-        imgdir = os.path.join(basedir, 'images_{}x{}'.format(r[1], r[0]))
-        if not os.path.exists(imgdir):
-            needtoload = True
-    if not needtoload:
-        return
-
-    from shutil import copy
-    from subprocess import check_output
-
-    imgdir = os.path.join(basedir, 'images')
-    imgs = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir))]
-    imgs = [f for f in imgs if any([f.endswith(ex) for ex in ['JPG', 'jpg', 'png', 'jpeg', 'PNG']])]
-    imgdir_orig = imgdir
-
-    wd = os.getcwd()
-
-    for r in factors + resolutions:
-        if isinstance(r, int):
-            name = 'images_{}'.format(r)
-            resizearg = '{}%'.format(100. / r)
-        else:
-            name = 'images_{}x{}'.format(r[1], r[0])
-            resizearg = '{}x{}'.format(r[1], r[0])
-        imgdir = os.path.join(basedir, name)
-        if os.path.exists(imgdir):
-            continue
-
-        print('Minifying', r, basedir)
-
-        os.makedirs(imgdir)
-        check_output('cp {}/* {}'.format(imgdir_orig, imgdir), shell=True)
-
-        ext = imgs[0].split('.')[-1]
-        args = ' '.join(['mogrify', '-resize', resizearg, '-format', 'png', '*.{}'.format(ext)])
-        print(args)
-        os.chdir(imgdir)
-        check_output(args, shell=True)
-        os.chdir(wd)
-
-        if ext != 'png':
-            check_output('rm {}/*.{}'.format(imgdir, ext), shell=True)
-            print('Removed duplicates')
-        print('Done')
-
-
 def _load_data(basedir, factor=None, width=None, height=None, load_imgs=True):
     poses_arr = np.load(os.path.join(basedir, 'poses_bounds.npy'))
     poses = poses_arr[:, :-2].reshape([-1, 3, 5]).transpose([1, 2, 0])
@@ -71,7 +19,6 @@ def _load_data(basedir, factor=None, width=None, height=None, load_imgs=True):
 
     if factor is not None:
         sfx = '_{}'.format(factor)
-        _minify(basedir, factors=[factor])
         factor = factor
     else:
         factor = 1
@@ -111,10 +58,10 @@ def load_llff_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=Fal
     poses, bds, imgs = _load_data(basedir, factor=factor)  # factor=8 downsamples original imgs by 8x
     print('Loaded', basedir, bds.min(), bds.max())
     # for debug only
-    selected_idx = [0, 1, 2, 9, 8, 7, 10, 11, 19, 18]
-    imgs = imgs[..., selected_idx]
-    poses = poses[..., selected_idx]
-    bds = bds[..., selected_idx]
+    # selected_idx = [0, 1, 2, 9, 8, 7, 10, 11, 19, 18]
+    # imgs = imgs[..., selected_idx]
+    # poses = poses[..., selected_idx]
+    # bds = bds[..., selected_idx]
 
     # Correct rotation matrix ordering and move variable dim to axis 0
     poses = np.concatenate([poses[:, 1:2, :], poses[:, 0:1, :], -poses[:, 2:3, :], poses[:, 3:, :]], 1)
@@ -183,6 +130,13 @@ def load_llff_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=Fal
     return images, poses, intrins, bds, render_poses, render_intrins
 
 
+def load_mv_videos(basedir, factor=1, recenter=True, bd_factor=.75):
+    _, poses, intrins, bds, render_poses, render_intrins = load_llff_data(basedir, None, recenter, bd_factor)
+    videos_path = glob.glob(basedir + "/videos/*")
+    videos = [imageio.mimread(vp) for vp in videos_path]
+    return videos, poses, intrins, bds, render_poses, render_intrins
+
+
 def load_masks(imgpaths):
     msklist = []
 
@@ -242,11 +196,6 @@ def load_images(imgpaths):
     imglist = np.stack(imglist, 0)
 
     return imglist
-
-
-def load_videos(vidpath, factor):  # todo: factor not implemented
-    vid = imageio.mimread(vidpath, memtest=False)
-    return vid
 
 
 def normalize(x):

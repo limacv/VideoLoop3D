@@ -148,9 +148,9 @@ def get_embedder(multires, embed_type='pe', input_dim=3,
                  dict_len=-1, latent_size=-1,  # when >0 means time embedder else general embedder
                  log2_hash_size=19, finest_resolution=1024  # args for hashembedder
                  ):
-    if (latent_size == 0 and embed_type == "latent") \
-            or (multires == 0 and embed_type == "pe")\
-            or (multires == 0 and embed_type == "hash"):
+    if (latent_size < 0 and embed_type == "latent") \
+            or (multires < 0 and embed_type == "pe")\
+            or (multires < 0 and embed_type == "hash"):
         return lambda x: torch.ones_like(x[..., :0]), 0
     embed_kwargs = {
         'include_input': True,

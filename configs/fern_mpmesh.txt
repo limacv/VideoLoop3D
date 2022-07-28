@@ -1,7 +1,7 @@
 gpu_num = 1
 # Dataset related
 expname = fern_mesh8big_cnl27viewrgb_smth02_laplacian5_normverts
-datadir = /apdcephfs/private_leema/data/VideoLoops/fern/
+datadir = /apdcephfs/private_leema/data/VideoLoops/data/fern/
 expdir  = /apdcephfs/private_leema/data/VideoLoops/logs
 factor = 8
 seed = 2
@@ -24,8 +24,9 @@ patch_h_size = 190
 patch_w_size = 256
 lrate = 0.05
 lrate_decay = 100
-rgb_mlp_type = rgbmlp
+rgb_mlp_type = direct
 rgb_activate = sigmoid
+alpha_activate = sigmoid
 
 ## sparsity_loss_weight = 0
 rgb_smooth_loss_weight = 0.2

@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as torchf
 import numpy as np
 from typing import Union, Sequence, Tuple
+import torch.nn as nn
 
 
 class Feat2RGBMLP_alpha(nn.Module):  # alpha is view-independent
@@ -46,15 +47,32 @@ class NeX_RGB(nn.Module):  # alpha is view dependent
         return torch.cat([rgb, x[..., :1]], dim=-1)
 
 
-class SphericalHarmoic(nn.Module):
+class SphericalHarmoic_RGB(nn.Module):  # alpha is view-independent
     def __init__(self, feat_cnl, view_cn):
         super().__init__()
+        self.sh_dim = 9
         self.feat_cnl = feat_cnl
+        self.view_cnl = view_cn
 
     def forward(self, x):
-        basis = eval_sh_bases(self.feat_cnl, x[..., self.feat_cnl: self.feat_cnl + 3])
-        color = torch.sum(sh_base.reshape(1, 1, -1) * color, dim=-1) + 0.5
-        color = color.clamp(0., 1.).cpu().numpy()
+        feat, view = torch.split(x, [self.feat_cnl, self.view_cnl], -1)
+        sh_base = eval_sh_bases(self.sh_dim, view[..., :3])
+        rgb = torch.sum(sh_base.reshape(-1, 1, self.sh_dim) * feat[..., 1:].reshape(-1, 3, self.sh_dim), dim=-1)
+        return torch.cat([rgb, feat[..., :1]], dim=-1)
+
+
+class SphericalHarmoic_RGBA(nn.Module):  # alpha is view-independent
+    def __init__(self, feat_cnl, view_cn):
+        super().__init__()
+        self.sh_dim = 9
+        self.feat_cnl = feat_cnl
+        self.view_cnl = view_cn
+
+    def forward(self, x):
+        feat, view = torch.split(x, [self.feat_cnl, self.view_cnl], -1)
+        sh_base = eval_sh_bases(self.sh_dim, view[..., :3])
+        rgba = torch.sum(sh_base.reshape(1, 1, -1) * feat.reshape(-1, 4, self.sh_dim), dim=-1)
+        return rgba
 
 
 def overcompose(alpha, content):
@@ -296,6 +314,8 @@ def warp_flow(content: torch.Tensor, flow: torch.Tensor, offset=None, pad_mode="
     warpped = torchf.grid_sample(mpi, grid / normanator - 1., padding_mode=pad_mode, mode=mode, align_corners=True)
     return warpped.reshape(orishape)
 
+
+# spherical hamoric related, copy from svox2
 
 SH_C0 = 0.28209479177387814
 SH_C1 = 0.4886025119029199

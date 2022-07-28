@@ -8,7 +8,7 @@ import time
 from torch.utils.tensorboard import SummaryWriter
 from MPI import *
 
-from dataloader import load_llff_data, poses_avg
+from dataloader import load_mv_videos, poses_avg, load_llff_data
 from utils import *
 import shutil
 from datetime import datetime
@@ -35,6 +35,7 @@ def train():
     print(f"Training: {args.expname}")
     images, poses, intrins, bds, render_poses, render_intrins = load_llff_data(basedir=args.datadir,
                                                                                factor=args.factor,
+                                                                               bd_factor=args.bd_factor,
                                                                                recenter=True)
 
     H, W = images[0].shape[0:2]
@@ -143,86 +144,6 @@ def train():
 
     global_step = start
 
-    # Short circuit if only rendering out from trained model
-    if args.render_only:
-        print('RENDER ONLY')
-        with torch.no_grad():
-
-            i = start + 1
-            if hasattr(nerf.module, "update_step"):
-                nerf.module.update_step(i)
-            suffix = ''
-            if len(args.texture_map_post) > 0:
-                assert os.path.isfile(args.texture_map_post)
-                print(f'loading texture map from {args.texture_map_post}')
-                nerf.module.force_load_texture_map(args.texture_map_post, args.texture_map_post_isfull, args.texture_map_force_map)
-                suffix += '_' + os.path.basename(args.texture_map_post).split('.')[0]
-
-            if len(args.geometry_map_post) > 0:
-                assert os.path.isfile(args.geometry_map_post)
-                print(f'loading geometry map from {args.geometry_map_post}')
-                nerf.module.force_load_geometry_map(args.geometry_map_post, args.geometry_map_post_isfull)
-                suffix += '_' + os.path.basename(args.geometry_map_post).split('.')[0]
-
-            savedir = os.path.join(args.expdir, args.expname, f'render_only')
-            os.makedirs(savedir, exist_ok=True)
-
-            if args.render_view >= 0:
-                render_poses = poses[args.render_view:args.render_view+1].expand(T, -1, -1)
-                render_intrins = intrins[args.render_view:args.render_view+1].expand(T, -1, -1)
-                suffix += f"_view{args.render_view:03d}"
-
-            print('render fix t: ', render_poses.shape, render_intrins.shape)
-            dummy_num = ((len(render_poses) - 1) // args.gpu_num + 1) * args.gpu_num - len(render_poses)
-            dummy_poses = torch.eye(3, 4).unsqueeze(0).expand(dummy_num, 3, 4).type_as(render_poses)
-            dummy_intrinsic = render_intrins[:dummy_num].clone()
-            print(f"Append {dummy_num} # of poses to fill all the GPUs")
-
-            with torch.no_grad():
-                nerf.eval()
-                render_time = 0
-
-                if args.render_texture:
-                    print('saving texture map')
-                    if T <= 1:
-                        texture_maps = nerf.module.get_texture_map()
-                        texture_maps = [tex[0, :3].detach().permute(1, 2, 0).cpu().numpy() for tex in texture_maps]
-                        for i, texture_map in enumerate(texture_maps):
-                            imageio.imwrite(savedir + f"/texture{suffix}_{i}.png",
-                                            to8b(texture_map))
-                    else:
-                        texture_maps = []
-                        for ti in range(T):
-                            print(f"Get texture map {ti}")
-                            texture_map = nerf.module.get_texture_map(t=ti)
-                            texture_map = [to8b(tex[0, :3].detach().permute(1, 2, 0).cpu().numpy()) for tex in
-                                           texture_map]
-                            texture_maps.append(texture_map)
-                        for i in range(len(texture_maps[0])):
-                            texture_map = [ts[i] for ts in texture_maps]
-                            imageio.mimwrite(savedir + f"/texture_{suffix}_{i}.mp4", texture_map,
-                                             fps=30, quality=8)
-
-                if T > 1 and not args.render_test:
-                    rH, rW = H * args.render_factor, W * args.render_factor
-                    render_intrins = render_intrins.clone()
-                    render_intrins[:, :2, :3] *= args.render_factor
-                    rgbs, disps = nerf(rH, rW, chunk=args.render_chunk,
-                                       poses=torch.cat([render_poses, dummy_poses], dim=0),
-                                       intrins=torch.cat([render_intrins, dummy_intrinsic], dim=0),
-                                       render_kwargs=render_kwargs_test)
-                    rgbs = rgbs[:len(rgbs) - dummy_num]
-                    disps = disps[:len(disps) - dummy_num]
-                    disps = (disps - disps.min()) / (disps.max() - disps.min()).clamp_min(1e-10)
-                    rgbs = rgbs.cpu().numpy()
-                    disps = disps.cpu().numpy()
-                    moviebase = os.path.join(savedir, f'{args.expname}_varyt_{render_time:06d}_')
-                    imageio.mimwrite(moviebase + f'rgb{suffix}.mp4', to8b(rgbs), fps=30, quality=8)
-                    imageio.mimwrite(moviebase + f'disp{suffix}.mp4', to8b(disps / np.max(disps)), fps=30,
-                                     quality=8)
-            return
-
-            # Prepare raybatch tensor if batching random rays
     print('Begin')
 
     start = start + 1
@@ -423,7 +344,7 @@ def config_parser():
                         help='atlas_size = mpi_d * H * W * atlas_size_scale')
     parser.add_argument("--atlas_cnl", type=int, default=4,
                         help='channel num')
-    parser.add_argument("--multires_views", type=int, default=4,
+    parser.add_argument("--multires_views", type=int, default=0,
                         help='log2 of max freq for positional encoding (2D direction)')
     parser.add_argument("--model_type", type=str, default="MPI",
                         choices=["MPI", "MPMesh"])
@@ -431,11 +352,13 @@ def config_parser():
                         help='mlp type, choose among "direct", "rgbamlp", "rgbmlp"')
     parser.add_argument("--rgb_activate", type=str, default='sigmoid',
                         help='activate function for rgb output, choose among "none", "sigmoid"')
+    parser.add_argument("--alpha_activate", type=str, default='sigmoid',
+                        help='activate function for rgb output, choose among "none", "sigmoid"')
     parser.add_argument("--optimize_depth", action='store_true',
                         help='if true, optimzing the depth of each plane')
     parser.add_argument("--optimize_normal", action='store_true',
                         help='if true, optimzing the normal of each plane')
-    parser.add_argument("--optimize_geo_start", type=int, default=100000,
+    parser.add_argument("--optimize_geo_start", type=int, default=10000000,
                         help='iteration to start optimizing verts and uvs')
     parser.add_argument("--optimize_verts_gain", type=float, default=1,
                         help='set 0 to disable the vertices optimization')
@@ -500,10 +423,6 @@ def config_parser():
                         help='windowed PE start step')
     parser.add_argument("--multires_window_end", type=int, default=-1,
                         help='windowed PE end step, negative to disable')
-    parser.add_argument("--multires_views_window_start", type=int, default=0,
-                        help='log2 of max freq for positional encoding (2D direction)')
-    parser.add_argument("--multires_views_window_end", type=int, default=-1,
-                        help='log2 of max freq for positional encoding (2D direction)')
     parser.add_argument("--raw_noise_std", type=float, default=1e0,
                         help='std dev of noise added to regularize sigma_a output, 1e0 recommended')
     parser.add_argument("--render_only", action='store_true',
@@ -557,7 +476,7 @@ def config_parser():
     # MA Li in General
     # ===================================
     parser.add_argument("--frm_num", type=int, default=-1, help='number of frames to use')
-    parser.add_argument("--bd_factor", type=float, default=0.65, help='expand factor of the ROI box')
+    parser.add_argument("--bd_factor", type=float, default=0.75, help='expand factor of the ROI box')
     parser.add_argument("--optimize_poses", default=False, action='store_true',
                         help='optimize poses')
     parser.add_argument("--optimize_poses_start", type=int, default=0, help='start step of optimizing poses')

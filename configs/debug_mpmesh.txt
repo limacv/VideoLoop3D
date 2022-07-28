@@ -1,9 +1,9 @@
 gpu_num = 1
 # Dataset related
 expname = debug
-datadir = M:\VideoLoops\fern
+datadir = M:\VideoLoops\data\droplet640p
 expdir  = M:\VideoLoops\logs
-factor = 8
+factor = 1
 seed = 2
 model_type = MPMesh
 
@@ -13,7 +13,7 @@ mpi_w_scale = 1.4
 mpi_h_verts = 12
 mpi_w_verts = 15
 mpi_d = 32
-atlas_cnl = 27
+atlas_cnl = 4
 atlas_grid_h = 4
 atlas_size_scale = 1
 
@@ -24,7 +24,7 @@ patch_h_size = 128
 patch_w_size = 128
 lrate = 1
 lrate_decay = 30
-rgb_mlp_type = direct
+rgb_mlp_type = rgb_sh
 rgb_activate = sigmoid
 
 normalize_verts

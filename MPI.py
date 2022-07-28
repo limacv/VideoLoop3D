@@ -27,7 +27,9 @@ activate = {'relu': torch.relu,
             'sigmoid1': lambda x: 1.002 / (torch.exp(-x) + 1) - 0.001,
             'softplus': lambda x: nn.Softplus()(x - 1),
             'tanh': torch.tanh,
-            'clamp': lambda x: torch.clamp(x, 0, 1)}
+            'clamp': lambda x: torch.clamp(x, 0, 1),
+            'clamp_g': lambda x: x + (torch.clamp(x, 0, 1) - x).detach(),
+            'plus05': lambda x: x + 0.5}
 
 
 class MPI(nn.Module):
@@ -59,7 +61,7 @@ class MPI(nn.Module):
         mpi[:, :, -1] = -2
 
         self.register_parameter("mpi", nn.Parameter(mpi, requires_grad=True))
-        self.tonemapping = activate['sigmoid']
+        self.tonemapping = activate[args.rgb_activate]
 
     def forward(self, h, w, tar_extrins, tar_intrins):
         ref_extrins = self.ref_extrin[None, ...].expand_as(tar_extrins)
@@ -165,9 +167,18 @@ class MPMesh(nn.Module):
             self.feat2rgba = NeX_RGB(args.atlas_cnl, self.view_cnl)
             self.use_viewdirs = True
             atlas[:, 0] = -2
+        elif args.rgb_mlp_type == "rgb_sh":
+            assert self.args.atlas_cnl == 3 * 9 + 1  # one for alpha, 9 for base
+            self.feat2rgba = SphericalHarmoic_RGB(args.atlas_cnl, self.view_cnl)
+            self.use_viewdirs = True
+        elif args.rgb_mlp_type == "rgba_sh":
+            assert self.args.atlas_cnl == 4 * 9  # 9 for each channel
+            self.feat2rgba = SphericalHarmoic_RGBA(args.atlas_cnl, self.view_cnl)
+            self.use_viewdirs = True
         else:
             raise RuntimeError(f"rgbmlp_type = {args.rgb_mlp_type} not recognized")
         self.rgb_activate = activate[args.rgb_activate]
+        self.alpha_activate = activate[args.alpha_activate]
 
     def get_optimizer(self):
         args = self.args
@@ -221,16 +232,6 @@ class MPMesh(nn.Module):
                 ]).reshape(-1, 2).type_as(self.uvs)
                 self.uvs *= uv_scaling
 
-    # def post_backward(self):
-    # if self.verts.grad is not None:
-    #     # the grad_graph is scale with uv, so we redo the scaling
-    #     uv_scaling = max(self.atlas.shape)
-    #     depth_scaling = self.planedepth / self.planedepth[0]
-    #     graddata = self.verts.grad.data.reshape(self.mpi_d, -1)
-    #     graddata *= (self.args.optimize_verts_gain / uv_scaling * depth_scaling[:, None])
-    # if self.uvs.grad is not None:
-    #     self.uvs.grad.data *= self.args.optimize_uvs_gain
-
     def save_mesh(self, prefix):
         vertices, faces, uvs = self.verts.detach(), self.faces.detach(), self.uvs.detach()
         uv_scaling = torch.tensor([
@@ -249,12 +250,12 @@ class MPMesh(nn.Module):
     def save_texture(self, prefix):
         texture = self.atlas.detach()[0].permute(1, 2, 0).reshape(-1, self.args.atlas_cnl)
         ray_dir = torch.tensor([[0, 0, 1.]]).type_as(texture).expand(len(texture), -1)
-        ray_dir = self.view_embed_fn(ray_dir[:, :2])
+        ray_dir = self.view_embed_fn(ray_dir)
         tex_input = torch.cat([texture, ray_dir], dim=-1)
         chunksz = self.args.chunk
         rgba = torch.cat([self.feat2rgba(tex_input[batchi: batchi + chunksz])
                           for batchi in range(0, len(tex_input), chunksz)])
-        rgba = self.rgb_activate(rgba)
+        rgba = torch.cat([self.rgb_activate(rgba[..., :-1]), self.alpha_activate(rgba[..., -1:])], dim=-1)
         texture = (rgba * 255).type(torch.uint8).reshape(self.atlas_h, self.atlas_w, 4).cpu().numpy()
         import imageio
         imageio.imwrite(prefix + ".png", texture)
@@ -313,7 +314,7 @@ class MPMesh(nn.Module):
         ray_direction = ray_direction / ray_direction.norm(dim=-1, keepdim=True)
         ray_direction = ray_direction[..., None, :].expand(pixel_to_face.shape + (3,))
         ray_d = ray_direction.reshape(-1, 3)[mask, :]
-        ray_d = self.view_embed_fn(ray_d.reshape(-1, 3)[:, :2])  # only use xy for ray direction
+        ray_d = self.view_embed_fn(ray_d.reshape(-1, 3))
 
         # uv from 0, S - 1  to -1, 1
         uv_scaling = torch.tensor([
@@ -329,7 +330,7 @@ class MPMesh(nn.Module):
         tex_input = torch.cat([rgba_feat, ray_d], dim=-1)
         rgba = torch.cat([self.feat2rgba(tex_input[batchi: batchi + chunksz])
                           for batchi in range(0, len(tex_input), chunksz)])
-        rgba = self.rgb_activate(rgba)
+        rgba = torch.cat([self.rgb_activate(rgba[..., :-1]), self.alpha_activate(rgba[..., -1:])], dim=-1)
         canvas = torch.zeros((B, H, W, self.mpi_d, 4)).type_as(rgba).reshape(-1, 4)
         mpi = torch.masked_scatter(canvas, mask[:, None].expand_as(canvas), rgba)
         mpi = mpi.reshape(B, H, W, self.mpi_d, 4)
