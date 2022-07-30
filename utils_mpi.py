@@ -75,6 +75,20 @@ class SphericalHarmoic_RGBA(nn.Module):  # alpha is view-independent
         return rgba
 
 
+# geometric utils: generating geometry
+# #####################################
+def gen_mpi_vertices(H, W, intrin, num_vert_h, num_vert_w, planedepth):
+    verts = torch.meshgrid(
+        [torch.linspace(0, H - 1, num_vert_h), torch.linspace(0, W - 1, num_vert_w)])
+    verts = torch.stack(verts[::-1], dim=-1).reshape(1, -1, 2)
+    # num_plane, H*W, 2
+    verts = (verts - intrin[None, None, :2, 2]) * planedepth[:, None, None].type_as(verts)
+    verts /= intrin[None, None, [0, 1], [0, 1]]
+    zs = planedepth[:, None, None].expand_as(verts[..., :1])
+    verts = torch.cat([verts.reshape(-1, 2), zs.reshape(-1, 1)], dim=-1)
+    return verts
+
+
 def overcompose(alpha, content):
     """
     compose mpi back (-1) to front (0)

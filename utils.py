@@ -80,6 +80,28 @@ class ParamsWithGradGain(nn.Module):
         return self.param
 
 
+def generate_patchinfo(H_, W_, patch_size_, patch_stride_):
+    patch_h_size, patch_w_size = patch_size_
+    patch_h_stride, patch_w_stride = patch_stride_
+
+    # generate patch information
+    patch_h_start = np.arange(0, H_ - patch_h_size + patch_h_stride, patch_h_stride)
+    patch_w_start = np.arange(0, W_ - patch_w_size + patch_w_stride, patch_w_stride)
+
+    patch_wh_start = np.meshgrid(patch_h_start, patch_w_start)
+    patch_wh_start = np.stack(patch_wh_start[::-1], axis=-1).reshape(-1, 2)[None, ...]
+
+    patch_wh_start = patch_wh_start.reshape(-1, 2)
+    patch_wh_start = torch.tensor(patch_wh_start)
+
+    H_pad = patch_h_start.max() + patch_h_size - H_
+    W_pad = patch_w_start.max() + patch_w_size - W_
+    assert patch_h_stride > H_pad >= 0 and patch_w_stride > W_pad >= 0, "bug occurs!"
+
+    pad_info = [0, W_pad, 0, H_pad]
+    return patch_wh_start, pad_info
+
+
 def xyz2uv_stereographic(xyz: torch.Tensor, normalized=False):
     """
     xyz: tensor of size (B, 3)

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as torchf
+import torchvision.transforms
 import os
 import imageio
 import time
@@ -9,6 +10,7 @@ from utils import *
 from NeRF_modules import get_embedder
 from utils_mpi import *
 import trimesh
+from utils_vid import Patch3DSWDLoss
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer import (
     look_at_view_transform,
@@ -32,57 +34,13 @@ activate = {'relu': torch.relu,
             'plus05': lambda x: x + 0.5}
 
 
-class MPI(nn.Module):
+class MPMeshVid(nn.Module):
     def __init__(self, args, H, W, ref_extrin, ref_intrin, near, far):
-        super(MPI, self).__init__()
-        self.args = args
-        self.mpi_h, self.mpi_w = int(args.mpi_h_scale * H), int(args.mpi_w_scale * W)
-        self.mpi_d, self.near, self.far = args.mpi_d, near, far
-        self.H, self.W = H, W
-        self.H_start, self.W_start = (self.mpi_h - H) // 2, (self.mpi_w - W) // 2
-        assert ref_extrin.shape == (4, 4) and ref_intrin.shape == (3, 3)
-        ref_intrin_mpi = get_new_intrin(ref_intrin, - self.H_start, - self.W_start)
-        self.register_buffer("ref_extrin", torch.tensor(ref_extrin))
-        self.register_buffer("ref_intrin", torch.tensor(ref_intrin_mpi).float())
-
-        planenormal = torch.tensor([0, 0, 1]).reshape(1, 3).repeat(self.mpi_d, 1).float()
-        if args.optimize_normal:
-            self.register_parameter("plane_normal", nn.Parameter(planenormal, requires_grad=True))
-        else:
-            self.register_buffer("plane_normal", planenormal)
-
-        planedepth = make_depths(self.mpi_d, near, far).float()
-        if args.optimize_depth:
-            self.register_parameter("plane_depth", nn.Parameter(planedepth, requires_grad=True))
-        else:
-            self.register_buffer("plane_depth", planedepth)
-
-        mpi = torch.rand((1, self.mpi_d, 4, self.mpi_h, self.mpi_w))  # RGBA
-        mpi[:, :, -1] = -2
-
-        self.register_parameter("mpi", nn.Parameter(mpi, requires_grad=True))
-        self.tonemapping = activate[args.rgb_activate]
-
-    def forward(self, h, w, tar_extrins, tar_intrins):
-        ref_extrins = self.ref_extrin[None, ...].expand_as(tar_extrins)
-        ref_intrins = self.ref_intrin[None, ...].expand_as(tar_intrins)
-        homo = compute_homography(ref_extrins, ref_intrins, tar_extrins, tar_intrins,
-                                  self.plane_normal[None, ...], self.plane_depth)
-        mpi_warp = warp_homography(h, w, homo, self.tonemapping(self.mpi))
-
-        extra = {}
-        if self.training:
-            if self.args.sparsity_loss_weight > 0:
-                sparsity = mpi_warp[:, :, -1].mean()
-                extra["sparsity"] = sparsity.reshape(1, -1)
-        return overcomposeNto0(mpi_warp), extra
-
-
-class MPMesh(nn.Module):
-    def __init__(self, args, H, W, ref_extrin, ref_intrin, near, far):
-        super(MPMesh, self).__init__()
+        super(MPMeshVid, self).__init__()
         self.args = args
         self.upsample_stage = args.upsample_stage
+        self.frm_num = args.mpv_frm_num
+        self.isloop = args.mpv_isloop
         self.mpi_h, self.mpi_w = int(args.mpi_h_scale * H), int(args.mpi_w_scale * W)
         self.mpi_d, self.near, self.far = args.mpi_d, near, far
         self.mpi_h_verts, self.mpi_w_verts = args.mpi_h_verts, args.mpi_w_verts
@@ -120,7 +78,7 @@ class MPMesh(nn.Module):
         faces013 = torch.stack([verts_indice[:, :-1, :-1], verts_indice[:, 1:, :-1], verts_indice[:, 1:, 1:]], -1)
         faces320 = torch.stack([verts_indice[:, 1:, 1:], verts_indice[:, :-1, 1:], verts_indice[:, :-1, :-1]], -1)
         faces = torch.cat([faces013.reshape(-1, 3), faces320.reshape(-1, 3)])
-
+        
         # generate uv coordinate
         # ########################
         uvs_plane = torch.meshgrid([torch.arange(self.atlas_grid_h) / self.atlas_grid_h,
@@ -132,7 +90,7 @@ class MPMesh(nn.Module):
         uvs = (uvs_plane.reshape(-1, 1, 2) + uvs_voxel.reshape(1, -1, 2)).reshape(-1, 2)
 
         scaling = 0.5 ** len(self.upsample_stage)
-        atlas = torch.rand((1, args.atlas_cnl, int(self.atlas_h * scaling), int(self.atlas_w * scaling)))
+        atlas = torch.rand((self.frm_num, args.atlas_cnl, int(self.atlas_h * scaling), int(self.atlas_w * scaling)))
 
         # -1, 1 to 0, h
         uvs = uvs * 0.5 + 0.5
@@ -182,10 +140,27 @@ class MPMesh(nn.Module):
         self.rgb_activate = activate[args.rgb_activate]
         self.alpha_activate = activate[args.alpha_activate]
 
-    def get_optimizer(self):
+        # initialize self
+        self.initialize(args.mpv_init_from)
+
+        # the SWD Loss
+        self.swd_patch_size = args.swd_patch_size
+        self.swd_patcht_size = args.swd_patcht_size
+        self.swd_loss = Patch3DSWDLoss(
+            patch_size=self.swd_patch_size,
+            patcht_size=self.swd_patcht_size, stride=1,
+            num_proj=args.swd_num_proj, use_convs=True, mask_patches_factor=0,
+            roi_region_pct=1
+        )
+
+    def lod(self, factor):
+        h, w = int(self.atlas_h * factor), int(self.atlas_w * factor)
+        new_atlas = torchvision.transforms.Resize((h, w))(self.atlas.data)
+        self.register_parameter("atlas", nn.Parameter(new_atlas, requires_grad=True))
+
+    def get_optimizer(self, step):
         args = self.args
-        base_lr = args.lrate
-        verts_lr = args.lrate * args.optimize_verts_gain
+        (_, base_lr), (_, verts_lr) = self.get_lrate(step)
 
         all_params = {k: v for k, v in self.named_parameters()}
         verts_params_list = ["_verts"]
@@ -219,20 +194,33 @@ class MPMesh(nn.Module):
             self.optimize_geometry = True
 
         # decide upsample
-        if step in self.upsample_stage:
-            scaling = 0.5 ** (len(self.upsample_stage) - self.upsample_stage.index(step) - 1)
-            scaled_size = int(self.atlas_h * scaling), int(self.atlas_w * scaling)
-            print(f"  Upsample to {scaled_size} in step {step}")
-            self.register_parameter("atlas",
-                                    nn.Parameter(
-                                        torchf.upsample(self.atlas, scaled_size, mode='bilinear'),
-                                        requires_grad=True))
-            with torch.no_grad():
-                uv_scaling = torch.tensor([
-                    (scaled_size[1] - 1) / (self.atlas.shape[-1] - 1),
-                    (scaled_size[0] - 1) / (self.atlas.shape[-2] - 1),
-                ]).reshape(-1, 2).type_as(self.uvs)
-                self.uvs *= uv_scaling
+        # if step in self.upsample_stage:
+        #     scaling = 0.5 ** (len(self.upsample_stage) - self.upsample_stage.index(step) - 1)
+        #     scaled_size = int(self.atlas_h * scaling), int(self.atlas_w * scaling)
+        #     print(f"  Upsample to {scaled_size} in step {step}")
+        #     self.register_parameter("atlas",
+        #                             nn.Parameter(
+        #                                 torchf.upsample(self.atlas, scaled_size, mode='bilinear'),
+        #                                 requires_grad=True))
+        #     with torch.no_grad():
+        #         uv_scaling = torch.tensor([
+        #             (scaled_size[1] - 1) / (self.atlas.shape[-1] - 1),
+        #             (scaled_size[0] - 1) / (self.atlas.shape[-2] - 1),
+        #         ]).reshape(-1, 2).type_as(self.uvs)
+        #         self.uvs *= uv_scaling
+
+    def initialize(self, method: str):
+        if len(method) == 0 or method == "noise":
+            pass  # already initialized
+        elif os.path.exists(method):  # path to atlas
+            self.load_state_dict(torch.load(method))
+        else:  # prefix
+            raise RuntimeError(f"[ERROR] initialize method {method} not recognized")
+            # tex_file = method + "_atlas.png"  # todo: saving geometry
+            # assert os.path.exists(tex_file)
+            # atlas = imageio.imread(tex_file)
+            # atlas = torch.tensor(atlas) / 255
+            # self.atlas
 
     def save_mesh(self, prefix):
         vertices, faces, uvs = self.verts.detach(), self.faces.detach(), self.uvs.detach()
@@ -250,6 +238,7 @@ class MPMesh(nn.Module):
 
     @torch.no_grad()
     def save_texture(self, prefix):
+        atlas_h, atlas_w = self.atlas.shape[-2:]
         texture = self.atlas.detach()[0].permute(1, 2, 0).reshape(-1, self.args.atlas_cnl)
         ray_dir = torch.tensor([[0, 0, 1.]]).type_as(texture).expand(len(texture), -1)
         ray_dir = self.view_embed_fn(ray_dir)
@@ -258,7 +247,7 @@ class MPMesh(nn.Module):
         rgba = torch.cat([self.feat2rgba(tex_input[batchi: batchi + chunksz])
                           for batchi in range(0, len(tex_input), chunksz)])
         rgba = torch.cat([self.rgb_activate(rgba[..., :-1]), self.alpha_activate(rgba[..., -1:])], dim=-1)
-        texture = (rgba * 255).type(torch.uint8).reshape(self.atlas_h, self.atlas_w, 4).cpu().numpy()
+        texture = (rgba * 255).type(torch.uint8).reshape(atlas_h, atlas_w, 4).cpu().numpy()
         import imageio
         imageio.imwrite(prefix + ".png", texture)
 
@@ -270,8 +259,8 @@ class MPMesh(nn.Module):
             verts = (verts.reshape(len(depth_scaling), -1) * depth_scaling[:, None]).reshape_as(verts)
         return verts
 
-    def render(self, H, W, extrin, intrin):
-        B = len(extrin)
+    def render(self, H, W, extrin, intrin, ts):
+        B = len(ts)
         verts, faces = self.verts.reshape(1, -1, 3), self.faces.reshape(1, -1, 3)
         with torch.set_grad_enabled(self.optimize_geometry):
             R, T = extrin[:, :3, :3], extrin[:, :3, 3]
@@ -307,8 +296,8 @@ class MPMesh(nn.Module):
             # currently the batching is not supported
             mask = pixel_to_face.reshape(-1) >= 0
             faces_ma = pixel_to_face.reshape(-1)[mask]
-            uv_indices = self.uvfaces[faces_ma]
-            uvs = self.uvs[uv_indices]  # N, 3, n_feat
+            vertices_index = faces[0, faces_ma]
+            uvs = self.uvs[vertices_index]  # N, 3, n_feat
             bary_coords_ma = bary_coords.reshape(-1, 3)[mask, :]  # N, 3
             uvs = (bary_coords_ma[..., None] * uvs).sum(dim=-2)
 
@@ -324,40 +313,54 @@ class MPMesh(nn.Module):
             2 / (self.atlas.shape[-2] - 1)
         ])
         uvs = uvs * uv_scaling - 1
-        rgba_feat = torchf.grid_sample(self.atlas,
-                                       uvs[None, None, ...],
+
+        HxWxD = len(uvs)
+        rgba_feat = torchf.grid_sample(self.atlas[ts],
+                                       uvs[None, None, ...].expand(B, 1, HxWxD, 2),
                                        padding_mode="zeros")
-        rgba_feat = rgba_feat.reshape(self.atlas.shape[1], -1).permute(1, 0)
+        rgba_feat = rgba_feat.reshape(B, self.atlas.shape[1], -1).permute(0, 2, 1)
         chunksz = self.args.chunk
-        tex_input = torch.cat([rgba_feat, ray_d], dim=-1)
+        tex_input = torch.cat([rgba_feat, ray_d[None].expand(B, HxWxD, -1)], dim=-1).reshape(B * HxWxD, -1)
         rgba = torch.cat([self.feat2rgba(tex_input[batchi: batchi + chunksz])
                           for batchi in range(0, len(tex_input), chunksz)])
-        rgba = torch.cat([self.rgb_activate(rgba[..., :-1]), self.alpha_activate(rgba[..., -1:])], dim=-1)
-        canvas = torch.zeros((B, H, W, self.mpi_d, 4)).type_as(rgba).reshape(-1, 4)
-        mpi = torch.masked_scatter(canvas, mask[:, None].expand_as(canvas), rgba)
+        rgba = torch.cat([self.rgb_activate(rgba[..., :-1]), self.alpha_activate(rgba[..., -1:])], dim=-1).reshape(B, HxWxD, 4)
+        canvas = torch.zeros((B, H, W, self.mpi_d, 4)).type_as(rgba).reshape(B, -1, 4)
+        mask_expand = mask[None, :, None].expand_as(canvas)
+        mpi = torch.masked_scatter(canvas, mask_expand.expand_as(canvas), rgba)
         mpi = mpi.reshape(B, H, W, self.mpi_d, 4)
         # make rgb d a plane
-        rgbd, blend_weight = overcompose(
+        rgb, blend_weight = overcompose(
             mpi[..., -1],
-            torch.cat([mpi[..., :-1], depths[..., None]], dim=-1)
+            mpi[..., :-1],
         )
 
         variables = {
             "pix_to_face": pixel_to_face,
             "blend_weight": blend_weight,
             "mpi": mpi,
-            "depth": rgbd[..., -1],
+            "depth": None,  # rgbd[..., -1],
             "alpha": blend_weight.sum(dim=-1)
         }
-        return rgbd[..., :3], variables
+        return rgb[..., :3], variables
 
-    def forward(self, h, w, tar_extrins, tar_intrins):
+    def forward(self, h, w, tar_extrins, tar_intrins, ts=None, res=None):
         extrins = tar_extrins @ self.ref_extrin[None, ...].inverse()
 
-        rgb, variables = self.render(h, w, extrins, tar_intrins)
+        if ts is None:
+            ts = torch.arange(self.frm_num).long()
+        rgb, variables = self.render(h, w, extrins, tar_intrins, ts)
         rgb = rgb.permute(0, 3, 1, 2)
         extra = {}
         if self.training:
+            assert res is not None
+            # main loss
+            rgb_pad = rgb
+            if self.isloop:
+                pad_frame = self.swd_patcht_size - 1
+                rgb_pad = torch.cat([rgb, rgb[:pad_frame]], 0)
+            swd_loss = self.swd_loss(rgb_pad.permute(1, 0, 2, 3)[None] * 2 - 1, res.permute(0, 2, 1, 3, 4) * 2 - 1)
+            extra['swd'] = swd_loss.reshape(1, -1)
+
             if self.args.sparsity_loss_weight > 0:
                 sparsity = variables["mpi"][..., -1].abs().mean()
                 extra["sparsity"] = sparsity.reshape(1, -1)
@@ -376,12 +379,12 @@ class MPMesh(nn.Module):
                 smooth = (smoothx + smoothy)
                 extra["a_smooth"] = smooth.reshape(1, -1)
 
-            if self.args.d_smooth_loss_weight > 0:
-                depth = variables['depth']
-                smoothx = (depth[:, :, :-1] - depth[:, :, 1:]).abs().mean()
-                smoothy = (depth[:, :-1] - depth[:, 1:]).abs().mean()
-                smooth = (smoothx + smoothy).reshape(1, -1)
-                extra["d_smooth"] = smooth.reshape(1, -1)
+            # if self.args.d_smooth_loss_weight > 0:
+            #     depth = variables['depth']
+            #     smoothx = (depth[:, :, :-1] - depth[:, :, 1:]).abs().mean()
+            #     smoothy = (depth[:, :-1] - depth[:, 1:]).abs().mean()
+            #     smooth = (smoothx + smoothy).reshape(1, -1)
+            #     extra["d_smooth"] = smooth.reshape(1, -1)
 
             if self.args.laplacian_loss_weight > 0:
                 verts = self.verts.reshape(self.mpi_d, self.mpi_h_verts, self.mpi_w_verts, -1)
@@ -395,4 +398,8 @@ class MPMesh(nn.Module):
                 verts_laplacian_y = (verts_pad[:, 1:-1, :-2] + verts_pad[:, 1:-1, 2:]) / 2
                 verts_laplacian = (verts_laplacian_y - verts).norm(dim=-1) + (verts_laplacian_x - verts).norm(dim=-1)
                 extra["laplacian"] = verts_laplacian.mean().reshape(1, -1)
-        return rgb, extra
+
+            return None, extra
+
+        else:  # if not self.training:
+            return rgb, {}
