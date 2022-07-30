@@ -148,7 +148,8 @@ def get_rays_tensor(H, W, K, c2w):
 
 
 def get_rays_tensor_batches(H, W, K, c2w):
-    i, j = torch.meshgrid(torch.linspace(0, W - 1, W), torch.linspace(0, H - 1, H))
+    i, j = torch.meshgrid([torch.linspace(0, W - 1, W, device=K.device),
+                          torch.linspace(0, H - 1, H, device=K.device)])
     i = i.t()
     j = j.t()
 

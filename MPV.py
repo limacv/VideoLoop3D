@@ -24,6 +24,7 @@ from pytorch3d.renderer import (
 
 activate = {'relu': torch.relu,
             'sigmoid': torch.sigmoid,
+            'unsigmoid': lambda x: torch.log(x.clamp(1e-6, 1 - 1e-6)/(1 - x.clamp(1e-6, 1 - 1e-6))),
             'exp': torch.exp,
             'none': lambda x: x,
             'sigmoid1': lambda x: 1.002 / (torch.exp(-x) + 1) - 0.001,
@@ -90,48 +91,54 @@ class MPMeshVid(nn.Module):
         uvs = (uvs_plane.reshape(-1, 1, 2) + uvs_voxel.reshape(1, -1, 2)).reshape(-1, 2)
 
         scaling = 0.5 ** len(self.upsample_stage)
-        atlas = torch.rand((self.frm_num, args.atlas_cnl, int(self.atlas_h * scaling), int(self.atlas_w * scaling)))
+        atlas = torch.rand((1, args.atlas_cnl, int(self.atlas_h * scaling), int(self.atlas_w * scaling)))
+        atlas_dyn = torch.randn((self.frm_num, 4, int(self.atlas_h * scaling), int(self.atlas_w * scaling))) * 0.02
 
         # -1, 1 to 0, h
-        uvs = uvs * 0.5 + 0.5
-        atlas_size = torch.tensor([int(self.atlas_w * scaling), int(self.atlas_h * scaling)]).reshape(-1, 2)
-        uvs *= (atlas_size - 1).type_as(uvs)
+        # uvs = uvs * 0.5 + 0.5
+        # atlas_size = torch.tensor([int(self.atlas_w * scaling), int(self.atlas_h * scaling)]).reshape(-1, 2)
+        # uvs *= (atlas_size - 1).type_as(uvs)
 
         self.register_parameter("uvs", nn.Parameter(uvs, requires_grad=True))
         self.register_buffer("uvfaces", faces.clone().long())
         self._verts = nn.Parameter(verts, requires_grad=True)
         self.register_buffer("faces", faces.long())
         self.optimize_geometry = False
+        self.register_parameter("atlas_dyn", nn.Parameter(atlas_dyn, requires_grad=True))
         self.register_parameter("atlas", nn.Parameter(atlas, requires_grad=True))
 
         self.view_embed_fn, self.view_cnl = get_embedder(args.multires_views, input_dim=3)
-        if args.rgb_mlp_type == "direct":
+        self.rgb_mlp_type = args.rgb_mlp_type
+        if self.rgb_mlp_type == "direct":
             self.feat2rgba = lambda x: x[..., :4]
-            atlas[:, -1] = -2
+            self.atlas.data[:, -1] = -2
+            self.atlas_dyn.data[:, -1] = -2
             self.use_viewdirs = False
-        elif args.rgb_mlp_type == "rgbamlp":
+        elif self.rgb_mlp_type == "rgbamlp":
             self.feat2rgba = nn.Sequential(
                 nn.Linear(self.view_cnl + args.atlas_cnl, 48), nn.ReLU(),
                 nn.Linear(48, 4)
             )
             self.feat2rgba[-2].bias.data[-1] = -2
             self.use_viewdirs = True
-        elif args.rgb_mlp_type == "rgbmlp":
+        elif self.rgb_mlp_type == "rgbmlp":
             self.feat2rgba = Feat2RGBMLP_alpha(args.atlas_cnl, self.view_cnl)
             self.use_viewdirs = True
-            atlas[:, 0] = -2
-        elif args.rgb_mlp_type == "rgbanex":
+            self.atlas.data[:, 0] = -2
+            self.atlas_dyn.data[:, 0] = -2
+        elif self.rgb_mlp_type == "rgbanex":
             self.feat2rgba = NeX_RGBA(args.atlas_cnl, self.view_cnl)
             self.use_viewdirs = True
-        elif args.rgb_mlp_type == "rgbnex":
+        elif self.rgb_mlp_type == "rgbnex":
             self.feat2rgba = NeX_RGB(args.atlas_cnl, self.view_cnl)
             self.use_viewdirs = True
-            atlas[:, 0] = -2
-        elif args.rgb_mlp_type == "rgb_sh":
+            self.atlas.data[:, 0] = -2
+            self.atlas_dyn.data[:, 0] = -2
+        elif self.rgb_mlp_type == "rgb_sh":
             assert self.args.atlas_cnl == 3 * 9 + 1  # one for alpha, 9 for base
             self.feat2rgba = SphericalHarmoic_RGB(args.atlas_cnl, self.view_cnl)
             self.use_viewdirs = True
-        elif args.rgb_mlp_type == "rgba_sh":
+        elif self.rgb_mlp_type == "rgba_sh":
             assert self.args.atlas_cnl == 4 * 9  # 9 for each channel
             self.feat2rgba = SphericalHarmoic_RGBA(args.atlas_cnl, self.view_cnl)
             self.use_viewdirs = True
@@ -156,7 +163,9 @@ class MPMeshVid(nn.Module):
     def lod(self, factor):
         h, w = int(self.atlas_h * factor), int(self.atlas_w * factor)
         new_atlas = torchvision.transforms.Resize((h, w))(self.atlas.data)
+        new_atlas_dyn = torchvision.transforms.Resize((h, w))(self.atlas_dyn.data)
         self.register_parameter("atlas", nn.Parameter(new_atlas, requires_grad=True))
+        self.register_parameter("atlas_dyn", nn.Parameter(new_atlas_dyn, requires_grad=True))
 
     def get_optimizer(self, step):
         args = self.args
@@ -212,8 +221,21 @@ class MPMeshVid(nn.Module):
     def initialize(self, method: str):
         if len(method) == 0 or method == "noise":
             pass  # already initialized
-        elif os.path.exists(method):  # path to atlas
+        elif os.path.exists(method) and method.endswith('.tar'):  # path to atlas
             self.load_state_dict(torch.load(method))
+        elif os.path.exists(method) and method.endswith('.png'):  # path to atlas
+            assert self.rgb_activate is activate['sigmoid'] \
+                   and self.alpha_activate is activate['sigmoid'] \
+                   and self.rgb_mlp_type == 'direct'
+            atlas = imageio.imread(method)
+            if atlas.shape[:2] != (self.atlas_h, self.atlas_w):
+                print(f"[WARNING] when initialize from {method}, "
+                      f"resize from {atlas.shape[:2]} to {(self.atlas_h, self.atlas_w)}")
+                atlas = cv2.resize(atlas, (self.atlas_w, self.atlas_h), interpolation=cv2.INTER_AREA)
+            atlas = activate['unsigmoid'](torch.tensor(atlas) / 255)
+            atlas = atlas.permute(2, 0, 1)[None].type_as(self.atlas)
+            self.atlas.data[:] = atlas
+            # self.atlas
         else:  # prefix
             raise RuntimeError(f"[ERROR] initialize method {method} not recognized")
             # tex_file = method + "_atlas.png"  # todo: saving geometry
@@ -224,11 +246,12 @@ class MPMeshVid(nn.Module):
 
     def save_mesh(self, prefix):
         vertices, faces, uvs = self.verts.detach(), self.faces.detach(), self.uvs.detach()
-        uv_scaling = torch.tensor([
-            1 / (self.atlas.shape[-1] - 1),
-            1 / (self.atlas.shape[-2] - 1)
-        ])
-        color = torch.cat([1 - uvs * uv_scaling, torch.zeros_like(uvs[:, :1])], dim=-1)
+        # uv_scaling = torch.tensor([
+        #     1 / (self.atlas.shape[-1] - 1),
+        #     1 / (self.atlas.shape[-2] - 1)
+        # ]).type_as(uvs)
+        # color = torch.cat([1 - uvs * uv_scaling, torch.zeros_like(uvs[:, :1])], dim=-1)
+        color = torch.cat([0.5 - uvs * 0.5, torch.zeros_like(uvs[:, :1])], dim=-1)
         color = np.clip(color.cpu().numpy() * 255, 0, 255).astype(np.uint8)
         mesh1 = trimesh.Trimesh(vertices.cpu().numpy(), faces.cpu().numpy(),
                                 vertex_colors=color)
@@ -260,7 +283,7 @@ class MPMeshVid(nn.Module):
         return verts
 
     def render(self, H, W, extrin, intrin, ts):
-        B = len(ts)
+        F = len(ts)
         verts, faces = self.verts.reshape(1, -1, 3), self.faces.reshape(1, -1, 3)
         with torch.set_grad_enabled(self.optimize_geometry):
             R, T = extrin[:, :3, :3], extrin[:, :3, 3]
@@ -308,26 +331,37 @@ class MPMeshVid(nn.Module):
         ray_d = self.view_embed_fn(ray_d.reshape(-1, 3))
 
         # uv from 0, S - 1  to -1, 1
-        uv_scaling = torch.tensor([
-            2 / (self.atlas.shape[-1] - 1),
-            2 / (self.atlas.shape[-2] - 1)
-        ])
-        uvs = uvs * uv_scaling - 1
+        # uv_scaling = torch.tensor([
+        #     2 / (self.atlas.shape[-1] - 1),
+        #     2 / (self.atlas.shape[-2] - 1)
+        # ], device=uvs.device)
+        # uvs = uvs * uv_scaling - 1
 
         HxWxD = len(uvs)
-        rgba_feat = torchf.grid_sample(self.atlas[ts],
-                                       uvs[None, None, ...].expand(B, 1, HxWxD, 2),
+        # dynamic part
+        rgba_dyn = torchf.grid_sample(self.atlas_dyn[ts],
+                                           uvs[None, None, ...].expand(F, 1, HxWxD, 2),
+                                           padding_mode="zeros")
+        rgba_dyn = rgba_dyn.reshape(F, 4, -1).permute(0, 2, 1)
+
+        # static part
+        rgba_feat = torchf.grid_sample(self.atlas,
+                                       uvs[None, None, ...],
                                        padding_mode="zeros")
-        rgba_feat = rgba_feat.reshape(B, self.atlas.shape[1], -1).permute(0, 2, 1)
+        rgba_feat = rgba_feat.reshape(1, self.atlas.shape[1], -1).permute(0, 2, 1)
         chunksz = self.args.chunk
-        tex_input = torch.cat([rgba_feat, ray_d[None].expand(B, HxWxD, -1)], dim=-1).reshape(B * HxWxD, -1)
+        tex_input = torch.cat([rgba_feat, ray_d[None]], dim=-1).reshape(HxWxD, -1)
         rgba = torch.cat([self.feat2rgba(tex_input[batchi: batchi + chunksz])
                           for batchi in range(0, len(tex_input), chunksz)])
-        rgba = torch.cat([self.rgb_activate(rgba[..., :-1]), self.alpha_activate(rgba[..., -1:])], dim=-1).reshape(B, HxWxD, 4)
-        canvas = torch.zeros((B, H, W, self.mpi_d, 4)).type_as(rgba).reshape(B, -1, 4)
+        rgba = rgba[None]
+
+        # fuse
+        rgba = torch.cat([self.rgb_activate(rgba[..., :-1] + rgba_dyn[..., :-1]),
+                          self.alpha_activate(rgba[..., -1:] + rgba_dyn[..., -1:])], dim=-1).reshape(F, HxWxD, 4)
+        canvas = torch.zeros((F, H, W, self.mpi_d, 4)).type_as(rgba).reshape(F, -1, 4)
         mask_expand = mask[None, :, None].expand_as(canvas)
         mpi = torch.masked_scatter(canvas, mask_expand.expand_as(canvas), rgba)
-        mpi = mpi.reshape(B, H, W, self.mpi_d, 4)
+        mpi = mpi.reshape(F, H, W, self.mpi_d, 4)
         # make rgb d a plane
         rgb, blend_weight = overcompose(
             mpi[..., -1],

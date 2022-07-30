@@ -37,7 +37,7 @@ def config_parser():
                         help='x,y,z,...   iteration to upsample')
     parser.add_argument("--pyr_minimal_dim", type=int, default=60,
                         help='if > 0, will determine the pyr_stage')
-    parser.add_argument("--pyr_num_step", type=int, default=1000,
+    parser.add_argument("--pyr_num_step", type=int, default=600,
                         help='iter num in each level')
     parser.add_argument("--pyr_factor", type=float, default=0.5,
                         help='factor in each pyr level')

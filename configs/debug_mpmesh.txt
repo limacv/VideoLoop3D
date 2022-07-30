@@ -8,7 +8,7 @@ seed = 2
 model_type = MPMesh
 
 # mpv configuration
-mpv_init_from = noise
+mpv_init_from = M:\VideoLoops\logs\droplet_smth02_direct\texture003000.png
 mpv_frm_num = 5
 mpv_isloop
 swd_patch_size = 7

@@ -17,7 +17,6 @@ import cv2
 from config_parser import config_parser
 
 torch.set_default_tensor_type('torch.cuda.FloatTensor')
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def train():

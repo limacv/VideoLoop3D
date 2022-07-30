@@ -16,6 +16,7 @@ from datetime import datetime
 from metrics import compute_img_metric
 import cv2
 from config_parser import config_parser
+from tqdm import tqdm, trange
 
 
 class MVPatchDataset(Dataset):
@@ -24,8 +25,8 @@ class MVPatchDataset(Dataset):
         h_raw, w_raw, _ = videos[0][0].shape[-3:]
         self.h, self.w = resize_hw
         self.v = len(videos)
-        self.poses = poses.clone()
-        self.intrins = intrins.clone()
+        self.poses = poses.clone().cpu()
+        self.intrins = intrins.clone().cpu()
         self.intrins[:, :2] *= torch.tensor([self.w / w_raw, self.h / h_raw]).reshape(1, 2, 1).type_as(intrins)
         self.patch_h_size, self.patch_w_size = patch_size
         if self.h * self.w < self.patch_h_size * self.patch_w_size:
@@ -37,12 +38,13 @@ class MVPatchDataset(Dataset):
 
         patch_wh_start = patch_wh_start[None, ...].expand(self.v, -1, 2)
         view_index = np.arange(self.v)[:, None, None].repeat(patch_wh_start.shape[1], axis=1)
-        self.patch_wh_start = patch_wh_start.reshape(-1, 2)
-        self.view_index = torch.tensor(view_index).long().reshape(-1)
+        self.patch_wh_start = patch_wh_start.reshape(-1, 2).cpu()
+        self.view_index = view_index.reshape(-1).tolist()
 
         self.videos = []
         for video in videos:
-            vid = torch.tensor([cv2.resize(img, (self.w, self.h)) for img in video], device='cpu')
+            vid = np.array([cv2.resize(img, (self.w, self.h)) for img in video])
+            vid = torch.tensor(vid, device='cpu')
             vid = (vid / 255).permute(0, 3, 1, 2)
             vid = torchf.pad(vid, pad_info)
             self.videos.append(vid)
@@ -53,7 +55,7 @@ class MVPatchDataset(Dataset):
 
     def __getitem__(self, item):
         w_start, h_start = self.patch_wh_start[item]
-        view_idx = self.view_index[item].item()
+        view_idx = self.view_index[item]
         pose = self.poses[view_idx]
         intrin = get_new_intrin(self.intrins[view_idx], h_start, w_start).float()
         crops = self.videos[view_idx][..., h_start: h_start + self.patch_h_size, w_start: w_start + self.patch_w_size]
@@ -134,7 +136,7 @@ def train():
         raise RuntimeError(f"Unrecognized model type {args.model_type}")
 
     nerf = nn.DataParallel(nerf, list(range(args.gpu_num)))
-
+    nerf.cuda()
     render_extrins = pose2extrin_np(render_poses)
     render_extrins = torch.tensor(render_extrins).float()
     render_intrins = torch.tensor(render_intrins).float()
@@ -194,34 +196,6 @@ def train():
         if stepi % args.i_print == 0:
             print(f"[TRAIN] Iter: {stepi} Loss: {loss.item():.4f} SWD: {swd_loss.item():.4f}",
                   "|".join([f"{k}: {v.item():.4f}" for k, v in extra_losses.items()]))
-
-        if stepi % args.i_weights == 0:
-            if hasattr(nerf.module, "save_mesh"):
-                prefix = os.path.join(args.expdir, args.expname, f"mesh{stepi:06d}")
-                nerf.module.save_mesh(prefix)
-
-            if hasattr(nerf.module, "save_texture"):
-                prefix = os.path.join(args.expdir, args.expname, f"texture{stepi:06d}")
-                nerf.module.save_texture(prefix)
-
-        if stepi % args.i_video == 0:
-            moviebase = os.path.join(args.expdir, args.expname, f'{stepi:06d}_')
-            print('render poses shape', render_extrins.shape, render_intrins.shape)
-            with torch.no_grad():
-                nerf.eval()
-
-                rgbs = []
-                for ri in range(len(render_extrins)):
-                    r_pose = render_extrins[ri:ri + 1]
-                    r_intrin = render_intrins[ri:ri + 1]
-
-                    rgb, extra = nerf(H, W, r_pose, r_intrin, ts=[ri % args.mpv_frm_num])
-                    rgb = rgb[0].permute(1, 2, 0).cpu().numpy()
-                    rgbs.append(rgb)
-
-                rgbs = np.array(rgbs)
-                imageio.mimwrite(moviebase + '_rgb.mp4', to8b(rgbs), fps=30, quality=8)
-
     # end of run one iteration
 
     # ##########################
@@ -240,7 +214,7 @@ def train():
                                  (args.patch_h_stride, args.patch_w_stride),
                                  poses, intrins)
         dataloader = DataLoader(dataset, 1, shuffle=True)
-        for epoch_i in range(num_step):
+        for epoch_i in trange(num_step):
             for iter_i, datainfo in enumerate(dataloader):
                 if hasattr(nerf.module, "update_step"):
                     nerf.module.update_step(epoch_total_step)
@@ -252,12 +226,41 @@ def train():
                     param_group['lr'] = new_lrate
 
                 # train for one interation
+                datainfo = [d.cuda() for d in datainfo]
                 run_iter(iter_total_step, optimizer, datainfo)
 
                 iter_total_step += 1
+
+            # saving after epoch
+            if epoch_total_step % args.i_weights == 0:
+                if hasattr(nerf.module, "save_mesh"):
+                    prefix = os.path.join(args.expdir, args.expname, f"mesh_l{pyr_i}_{epoch_i:06d}")
+                    nerf.module.save_mesh(prefix)
+
+                if hasattr(nerf.module, "save_texture"):
+                    prefix = os.path.join(args.expdir, args.expname, f"texture_l{pyr_i}_{epoch_i:06d}")
+                    nerf.module.save_texture(prefix)
+
+            if epoch_total_step % args.i_video == 0:
+                moviebase = os.path.join(args.expdir, args.expname, f'l{pyr_i}_{epoch_i:06d}_')
+                print('render poses shape', render_extrins.shape, render_intrins.shape)
+                with torch.no_grad():
+                    nerf.eval()
+
+                    rgbs = []
+                    for ri in range(len(render_extrins)):
+                        r_pose = render_extrins[ri:ri + 1]
+                        r_intrin = render_intrins[ri:ri + 1]
+
+                        rgb, extra = nerf(H, W, r_pose, r_intrin, ts=[ri % args.mpv_frm_num])
+                        rgb = rgb[0].permute(1, 2, 0).cpu().numpy()
+                        rgbs.append(rgb)
+
+                    rgbs = np.array(rgbs)
+                    imageio.mimwrite(moviebase + '_rgb.mp4', to8b(rgbs), fps=30, quality=8)
+
             epoch_total_step += 1
 
 
 if __name__ == '__main__':
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
     train()
