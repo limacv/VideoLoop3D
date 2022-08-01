@@ -1,6 +1,6 @@
 gpu_num = 1
 # Dataset related
-expname = droplet_smth02_direct
+expname = droplet_avg_smth02_direct
 datadir = /apdcephfs/private_leema/data/VideoLoops/data/droplet640p/
 expdir  = /apdcephfs/private_leema/data/VideoLoops/logs
 factor = 1
@@ -8,6 +8,7 @@ seed = 2
 model_type = MPMesh
 
 # mpi configuration
+vid2img_mode = average
 mpi_h_scale = 1.2
 mpi_w_scale = 1.2
 mpi_h_verts = 23
@@ -18,7 +19,7 @@ atlas_grid_h = 4
 atlas_size_scale = 1
 
 # Training related
-N_iters = 3000
+N_iters = 30
 patch_h_size = 180
 patch_w_size = 320
 lrate = 0.05

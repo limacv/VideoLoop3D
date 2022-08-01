@@ -39,7 +39,6 @@ class MPMeshVid(nn.Module):
     def __init__(self, args, H, W, ref_extrin, ref_intrin, near, far):
         super(MPMeshVid, self).__init__()
         self.args = args
-        self.upsample_stage = args.upsample_stage
         self.frm_num = args.mpv_frm_num
         self.isloop = args.mpv_isloop
         self.mpi_h, self.mpi_w = int(args.mpi_h_scale * H), int(args.mpi_w_scale * W)
@@ -90,7 +89,7 @@ class MPMeshVid(nn.Module):
         uvs_voxel = torch.stack(uvs_voxel[::-1], dim=-1).reshape(1, -1, 2) * uvs_voxel_size
         uvs = (uvs_plane.reshape(-1, 1, 2) + uvs_voxel.reshape(1, -1, 2)).reshape(-1, 2)
 
-        scaling = 0.5 ** len(self.upsample_stage)
+        scaling = 1
         atlas = torch.rand((1, args.atlas_cnl, int(self.atlas_h * scaling), int(self.atlas_w * scaling)))
         atlas_dyn = torch.randn((self.frm_num, 4, int(self.atlas_h * scaling), int(self.atlas_w * scaling))) * 0.02
 
@@ -201,22 +200,6 @@ class MPMeshVid(nn.Module):
     def update_step(self, step):
         if step >= self.args.optimize_geo_start:
             self.optimize_geometry = True
-
-        # decide upsample
-        # if step in self.upsample_stage:
-        #     scaling = 0.5 ** (len(self.upsample_stage) - self.upsample_stage.index(step) - 1)
-        #     scaled_size = int(self.atlas_h * scaling), int(self.atlas_w * scaling)
-        #     print(f"  Upsample to {scaled_size} in step {step}")
-        #     self.register_parameter("atlas",
-        #                             nn.Parameter(
-        #                                 torchf.upsample(self.atlas, scaled_size, mode='bilinear'),
-        #                                 requires_grad=True))
-        #     with torch.no_grad():
-        #         uv_scaling = torch.tensor([
-        #             (scaled_size[1] - 1) / (self.atlas.shape[-1] - 1),
-        #             (scaled_size[0] - 1) / (self.atlas.shape[-2] - 1),
-        #         ]).reshape(-1, 2).type_as(self.uvs)
-        #         self.uvs *= uv_scaling
 
     def initialize(self, method: str):
         if len(method) == 0 or method == "noise":

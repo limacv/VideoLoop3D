@@ -118,15 +118,16 @@ def load_llff_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=Fal
     images = images.astype(np.float32)
     poses = poses.astype(np.float32)
 
-    H, W, focal = poses[0, :3, -1]
+    H, W, focal = poses[:, :3, -1].T
     poses = poses[:, :3, :4]
-    intrins_one = np.array([
-        [focal, 0, 0.5 * W],
-        [0, focal, 0.5 * H],
-        [0, 0, 1]
-    ])
-    intrins = np.repeat(intrins_one[None, ...], len(poses), 0)
-    render_intrins = np.repeat(intrins_one[None, ...], len(render_poses), 0)
+    intrins = np.zeros_like(poses[:, :3, :3])
+    intrins[:, -1, -1] = 1
+    intrins[:, 0, 0] = focal
+    intrins[:, 1, 1] = focal
+    intrins[:, 0, 2] = 0.5 * W
+    intrins[:, 1, 2] = 0.5 * H
+
+    render_intrins = np.repeat(intrins[:1, ...], len(render_poses), 0)
     return images, poses, intrins, bds, render_poses, render_intrins
 
 

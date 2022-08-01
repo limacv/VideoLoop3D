@@ -7,16 +7,74 @@ import torch.nn as nn
 import time
 from torch.utils.tensorboard import SummaryWriter
 from MPI import *
-
+from torch.utils.data import Dataset, DataLoader
 from dataloader import load_mv_videos, poses_avg, load_llff_data
 from utils import *
 import shutil
 from datetime import datetime
 from metrics import compute_img_metric
 import cv2
+from tqdm import tqdm, trange
 from config_parser import config_parser
 
-torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
+class MVPatchDataset(Dataset):
+    def __init__(self, resize_hw, videos, patch_size, patch_stride, poses, intrins, mode='average'):
+        super().__init__()
+        h_raw, w_raw, _ = videos[0][0].shape[-3:]
+        self.h, self.w = resize_hw
+        self.v = len(videos)
+        self.poses = poses.clone().cpu()
+        self.intrins = intrins.clone().cpu()
+        self.intrins[:, :2] *= torch.tensor([self.w / w_raw, self.h / h_raw]).reshape(1, 2, 1).type_as(intrins)
+        self.patch_h_size, self.patch_w_size = patch_size
+        self.mode = mode
+        if self.h * self.w < self.patch_h_size * self.patch_w_size:
+            patch_wh_start = torch.tensor([[0, 0]]).long().reshape(-1, 2)
+            pad_info = [0, 0, 0, 0]
+            self.patch_h_size, self.patch_w_size = self.h, self.w
+        else:
+            patch_wh_start, pad_info = generate_patchinfo(self.h, self.w, patch_size, patch_stride)
+
+        patch_wh_start = patch_wh_start[None, ...].expand(self.v, -1, 2)
+        view_index = np.arange(self.v)[:, None, None].repeat(patch_wh_start.shape[1], axis=1)
+        self.patch_wh_start = patch_wh_start.reshape(-1, 2).cpu()
+        self.view_index = view_index.reshape(-1).tolist()
+
+        self.images = []
+        for video in videos:
+            vid = np.array([cv2.resize(img, (self.w, self.h)) for img in video]) / 255
+            # mid
+            if self.mode == 'median':
+                img = np.median(vid, axis=0)
+            elif self.mode == 'average':
+                # aveage
+                img = vid.mean(axis=0)
+            elif self.mode in ['dynamic', 'static']:
+                # emphsize the dynamics
+                weight = np.linalg.norm(vid - vid.mean(axis=0, keepdims=True), axis=-1, keepdims=True)
+                weight = weight ** 2
+                if self.mode == 'static':
+                    weight = 1 - weight
+                img = (vid * weight).sum(axis=0) / np.clip(weight.sum(axis=0), 1e-10, 999999)
+            else:
+                raise RuntimeError(f"Unrecognized vid2img_mode={self.mode}")
+
+            img = torch.tensor(img).permute(2, 0, 1)
+            self.images.append(img)
+        print(f"Dataset: generate {len(self)} patches for training, pad {pad_info} to videos")
+
+    def __len__(self):
+        return len(self.patch_wh_start)
+
+    def __getitem__(self, item):
+        w_start, h_start = self.patch_wh_start[item]
+        view_idx = self.view_index[item]
+        pose = self.poses[view_idx]
+        intrin = get_new_intrin(self.intrins[view_idx], h_start, w_start).float()
+        crops = self.images[view_idx][..., h_start: h_start + self.patch_h_size, w_start: w_start + self.patch_w_size]
+
+        return w_start, h_start, pose, intrin, crops.cuda()
 
 
 def train():
@@ -32,23 +90,19 @@ def train():
         print(f"Using {args.gpu_num} GPU(s)")
 
     print(f"Training: {args.expname}")
-    images, poses, intrins, bds, render_poses, render_intrins = load_llff_data(basedir=args.datadir,
+    videos, poses, intrins, bds, render_poses, render_intrins = load_mv_videos(basedir=args.datadir,
                                                                                factor=args.factor,
                                                                                bd_factor=args.bd_factor,
                                                                                recenter=True)
 
-    H, W = images[0].shape[0:2]
-    V = len(images)
+    H, W = videos[0][0].shape[0:2]
+    V = len(videos)
     print('Loaded llff', V, H, W, poses.shape, intrins.shape, render_poses.shape, bds.shape)
 
     ref_pose = poses_avg(poses)[:, :4]
     ref_extrin = pose2extrin_np(ref_pose)
-    ref_intrin = intrins[0]
+    ref_intrin = intrins.mean(0)
     ref_near, ref_far = bds[:, 0].min(), bds[:, 1].max()
-
-    # resolve scheduling
-    upsample_stage = list(map(int, args.upsample_stage.split(','))) if len(args.upsample_stage) > 0 else []
-    args.upsample_stage = upsample_stage
 
     # Summary writers
     writer = SummaryWriter(os.path.join(args.expdir, args.expname))
@@ -98,22 +152,6 @@ def train():
     # if optimize poses
     poses = torch.tensor(poses)
     intrins = torch.tensor(intrins)
-    if args.optimize_poses:
-        rot_raw = poses[:, :3, :2]
-        tran_raw = poses[:, :3, 3]
-        intrin_raw = intrins[:, :2, :3]
-
-        # leave the first pose unoptimized
-        rot_raw0, tran_raw0, intrin_raw0 = rot_raw[:1], tran_raw[:1], intrin_raw[:1]
-        rot_raw = nn.Parameter(rot_raw[1:], requires_grad=True)
-        tran_raw = nn.Parameter(tran_raw[1:], requires_grad=True)
-        intrin_raw = nn.Parameter(intrin_raw[1:], requires_grad=True)
-        pose_optimizer = torch.optim.SGD(params=[rot_raw, tran_raw, intrin_raw],
-                                         lr=args.lrate / 5)
-    else:
-        rot_raw0, tran_raw0, intrin_raw0 = None, None, None
-        rot_raw, tran_raw, intrin_raw = None, None, None
-        pose_optimizer = None
 
     ##########################
     # Load checkpoints
@@ -127,85 +165,20 @@ def train():
         print('Reloading from', ckpt_path)
         ckpt = torch.load(ckpt_path)
 
-        start = ckpt['global_step']
+        start = ckpt['iter_total_step']
         optimizer.load_state_dict(ckpt['optimizer_state_dict'])
         smart_load_state_dict(nerf, ckpt)
-        if 'rot_raw' in ckpt.keys():
-            print("Loading poses and intrinsics from the ckpt")
-            rot_raw = ckpt['rot_raw']
-            tran_raw = ckpt['tran_raw']
-            intrin_raw = ckpt['intrin_raw']
-            poses, intrinsics = raw2poses(
-                torch.cat([rot_raw0, rot_raw]),
-                torch.cat([tran_raw0, tran_raw]),
-                torch.cat([intrin_raw0, intrin_raw]))
-            assert len(rot_raw) + 1 == V
 
-    global_step = start
+    iter_total_step = start
 
-    print('Begin')
-
-    start = start + 1
-    N_iters = args.N_iters + 1
-    patch_h_size = args.patch_h_size
-    patch_w_size = args.patch_w_size
-
-    # generate patch information
-    patch_h_start = np.arange(0, H, patch_h_size)
-    patch_w_start = np.arange(0, W, patch_w_size)
-
-    patch_wh_start = np.meshgrid(patch_h_start, patch_w_start)
-    patch_wh_start = np.stack(patch_wh_start[::-1], axis=-1).reshape(-1, 2)[None, ...]
-    patch_wh_start = np.repeat(patch_wh_start, V, axis=0)
-
-    view_index = np.arange(V)[:, None, None].repeat(patch_wh_start.shape[1], axis=0)
-
-    patch_wh_start = patch_wh_start.reshape(-1, 2)
-    view_index = view_index.reshape(-1)
-    len_data = len(patch_wh_start)
-
-    patch_wh_start = torch.tensor(patch_wh_start)
-    view_index = torch.tensor(view_index).long()
-
-    H_pad = patch_h_start.max() + patch_h_size - H
-    W_pad = patch_w_start.max() + patch_w_size - W
-    images = torch.tensor(images)
-    images = torchf.pad(images.permute(0, 3, 1, 2), [0, W_pad, 0, H_pad])
-
-    # start training
-    permute = np.random.permutation(len_data)
-    i_batch = 0
-    for i in range(start, N_iters):
-        if i_batch >= len_data:
-            permute = np.random.permutation(len_data)
-            i_batch = 0
-
-        data_indice = permute[i_batch:i_batch + 1]
-        i_batch += 1
-        w_start, h_start = torch.split(patch_wh_start[data_indice], 1, dim=-1)
-        w_start, h_start = w_start[..., 0], h_start[..., 0]
-        view_idx = view_index[data_indice]
-
-        # if optimizing camera poses, regenerating the rays
-        if args.optimize_poses and global_step >= args.optimize_poses_start:
-            poses, intrins = raw2poses(
-                torch.cat([rot_raw0, rot_raw]),
-                torch.cat([tran_raw0, tran_raw]),
-                torch.cat([intrin_raw0, intrin_raw]))
-
-        b_pose = poses[view_idx]
+    # begin of run one iteration (one patch)
+    def run_iter(stepi, optimizer_, datainfo_):
+        h_starts, w_starts, b_pose, b_intrin, b_rgbs = datainfo_
         b_extrin = pose2extrin_torch(b_pose)
-        b_intrin = intrins[view_idx]
-        b_intrin_patch = get_new_intrin(b_intrin, h_start, w_start).float()
-        b_rgbs = torch.stack([images[v, :, hs: hs + patch_h_size, ws: ws + patch_w_size]
-                              for v, hs, ws in zip(view_idx, h_start, w_start)])
+        patch_h, patch_w = b_rgbs.shape[-2:]
 
-        #####  Core optimization loop  #####
         nerf.train()
-        if hasattr(nerf.module, "update_step"):
-            nerf.module.update_step(global_step)
-
-        rgb, extra = nerf(patch_h_size, patch_w_size, b_extrin, b_intrin_patch)
+        rgb, extra = nerf(patch_h, patch_w, b_extrin, b_intrin)
 
         # RGB loss
         img_loss = img2mse(rgb, b_rgbs)
@@ -222,96 +195,85 @@ def train():
         for v in extra_losses.values():
             loss = loss + v
 
-        # old_vert = nerf.module.verts.detach().clone()
-        optimizer.zero_grad()
-        if args.optimize_poses and global_step >= args.optimize_poses_start:
-            pose_optimizer.zero_grad()
+        optimizer_.zero_grad()
         loss.backward()
         if hasattr(nerf.module, "post_backward"):
             nerf.module.post_backward()
-        optimizer.step()
-        if args.optimize_poses and global_step >= args.optimize_poses_start:
-            pose_optimizer.step()
-        # delta_vert = (nerf.module.verts.detach() - old_vert).abs().max()
-        # print(f"max delta vert = {delta_vert.item()}")
+        optimizer_.step()
 
-        ###   update learning rate   ###
-        if hasattr(nerf.module, "get_lrate"):
-            name_lrates = nerf.module.get_lrate(global_step)
-        else:
-            decay_rate = 0.1
-            decay_steps = args.lrate_decay * 1000
-            new_lrate = args.lrate * (decay_rate ** (global_step / decay_steps))
-            name_lrates = [("lr", new_lrate)] * len(optimizer.param_groups)
-
-        for (lrname, new_lrate), param_group in zip(name_lrates, optimizer.param_groups):
-            param_group['lr'] = new_lrate
-
-        ################################
-
-        if i % args.i_img == 0:
-            writer.add_scalar('aloss/psnr', psnr, i)
-            writer.add_scalar('aloss/mse_loss', loss, i)
+        if stepi % args.i_img == 0:
+            writer.add_scalar('aloss/psnr', psnr, stepi)
+            writer.add_scalar('aloss/mse_loss', loss, stepi)
             for k, v in extra.items():
-                writer.add_scalar(f'{k}', float(v.mean()), i)
+                writer.add_scalar(f'{k}', float(v.mean()), stepi)
             for name, newlr in name_lrates:
-                writer.add_scalar(f'lr/{name}', newlr, i)
+                writer.add_scalar(f'lr/{name}', newlr, stepi)
 
-        if i % args.i_print == 0:
-            print(f"[TRAIN] Iter: {i} Loss: {loss.item():.4f} PSNR: {psnr.item():.4f}",
+        if stepi % args.i_print == 0:
+            print(f"[TRAIN] Iter: {stepi} Loss: {loss.item():.4f} PSNR: {psnr.item():.4f}",
                   "|".join([f"{k}: {v.item():.4f}" for k, v in extra_losses.items()]))
+    # end of run one iteration
 
-        if i % args.i_weights == 0:
-            if hasattr(nerf.module, "save_mesh"):
-                prefix = os.path.join(args.expdir, args.expname, f"mesh{i:06d}")
-                nerf.module.save_mesh(prefix)
+    # ##########################
+    # start training
+    # ##########################
+    print('Begin')
 
-            if hasattr(nerf.module, "save_texture"):
-                prefix = os.path.join(args.expdir, args.expname, f"texture{i:06d}")
-                nerf.module.save_texture(prefix)
+    dataset = MVPatchDataset((H, W), videos,
+                             (args.patch_h_size, args.patch_w_size),
+                             (args.patch_h_stride, args.patch_w_stride),
+                             poses, intrins, args.vid2img_mode)
+    # visualize the image, delete afterwards
+    for viewi, img in enumerate(dataset.images):
+        p = os.path.join(args.expdir, args.expname, f"imgvis_{args.vid2img_mode}", f"{viewi:04d}.png")
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        imageio.imwrite(p, to8b(img.permute(1, 2, 0).cpu().numpy()))
+    dataloader = DataLoader(dataset, 1, shuffle=True)
 
-            # path = os.path.join(args.expdir, args.expname, '{:06d}.tar'.format(i))
-            # save_dict = {
-            #     'global_step': global_step,
-            #     'network_state_dict': nerf.state_dict(),
-            #     'optimizer_state_dict': optimizer.state_dict(),
-            # }
-            # if args.optimize_poses:
-            #     save_dict['rot_raw'] = rot_raw
-            #     save_dict['tran_raw'] = tran_raw
-            #     save_dict['intrin_raw'] = intrin_raw
-            # torch.save(save_dict, path)
-            # print('Saved checkpoints at', path)
+    for epoch_i in trange(args.N_iters):
+        for iter_i, datainfo in enumerate(dataloader):
+            if hasattr(nerf.module, "update_step"):
+                nerf.module.update_step(iter_total_step)
 
-        if i % args.i_testset == 0:
-            pass
-            # TODO
+            ###   update learning rate   ###
+            name_lrates = nerf.module.get_lrate(iter_total_step)
+            for (lrname, new_lrate), param_group in zip(name_lrates, optimizer.param_groups):
+                param_group['lr'] = new_lrate
 
-        if i % args.i_eval == 0:
-            pass
-            # TODO
+            # train for one interation
+            datainfo = [d.cuda() for d in datainfo]
+            run_iter(iter_total_step, optimizer, datainfo)
 
-        if i % args.i_video == 0:
-            moviebase = os.path.join(args.expdir, args.expname, f'{i:06d}_')
-            print('render poses shape', render_extrins.shape, render_intrins.shape)
-            with torch.no_grad():
-                nerf.eval()
+            iter_total_step += 1
 
-                rgbs = []
-                for ri in range(len(render_extrins)):
-                    r_pose = render_extrins[ri:ri + 1]
-                    r_intrin = render_intrins[ri:ri + 1]
+            ################################
+            if iter_total_step % args.i_weights == 0:
+                if hasattr(nerf.module, "save_mesh"):
+                    prefix = os.path.join(args.expdir, args.expname, f"mesh{iter_total_step:06d}")
+                    nerf.module.save_mesh(prefix)
 
-                    rgb, extra = nerf(H, W, r_pose, r_intrin)
-                    rgb = rgb[0].permute(1, 2, 0).cpu().numpy()
-                    rgbs.append(rgb)
+                if hasattr(nerf.module, "save_texture"):
+                    prefix = os.path.join(args.expdir, args.expname, f"texture{iter_total_step:06d}")
+                    nerf.module.save_texture(prefix)
 
-                rgbs = np.array(rgbs)
-                imageio.mimwrite(moviebase + '_rgb.mp4', to8b(rgbs), fps=30, quality=8)
+            if iter_total_step % args.i_video == 0:
+                moviebase = os.path.join(args.expdir, args.expname, f'{iter_total_step:06d}_')
+                print('render poses shape', render_extrins.shape, render_intrins.shape)
+                with torch.no_grad():
+                    nerf.eval()
 
-        global_step += 1
+                    rgbs = []
+                    for ri in range(len(render_extrins)):
+                        r_pose = render_extrins[ri:ri + 1]
+                        r_intrin = render_intrins[ri:ri + 1]
+
+                        rgb, extra = nerf(H, W, r_pose, r_intrin)
+                        rgb = rgb[0].permute(1, 2, 0).cpu().numpy()
+                        rgbs.append(rgb)
+
+                    rgbs = np.array(rgbs)
+                    imageio.mimwrite(moviebase + '_rgb.mp4', to8b(rgbs), fps=30, quality=8)
 
 
 if __name__ == '__main__':
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
     train()

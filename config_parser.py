@@ -43,6 +43,8 @@ def config_parser():
                         help='factor in each pyr level')
 
     # for mpi
+    parser.add_argument("--vid2img_mode", type=str, default='average',
+                        help='choose among average, median, static, dynamic')
     parser.add_argument("--mpi_h_scale", type=float, default=1.4,
                         help='the height of the stored MPI is <mpi_h_scale * H>')
     parser.add_argument("--mpi_w_scale", type=float, default=1.4,

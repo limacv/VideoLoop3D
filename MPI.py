@@ -32,52 +32,6 @@ activate = {'relu': torch.relu,
             'plus05': lambda x: x + 0.5}
 
 
-class MPI(nn.Module):
-    def __init__(self, args, H, W, ref_extrin, ref_intrin, near, far):
-        super(MPI, self).__init__()
-        self.args = args
-        self.mpi_h, self.mpi_w = int(args.mpi_h_scale * H), int(args.mpi_w_scale * W)
-        self.mpi_d, self.near, self.far = args.mpi_d, near, far
-        self.H, self.W = H, W
-        self.H_start, self.W_start = (self.mpi_h - H) // 2, (self.mpi_w - W) // 2
-        assert ref_extrin.shape == (4, 4) and ref_intrin.shape == (3, 3)
-        ref_intrin_mpi = get_new_intrin(ref_intrin, - self.H_start, - self.W_start)
-        self.register_buffer("ref_extrin", torch.tensor(ref_extrin))
-        self.register_buffer("ref_intrin", torch.tensor(ref_intrin_mpi).float())
-
-        planenormal = torch.tensor([0, 0, 1]).reshape(1, 3).repeat(self.mpi_d, 1).float()
-        if args.optimize_normal:
-            self.register_parameter("plane_normal", nn.Parameter(planenormal, requires_grad=True))
-        else:
-            self.register_buffer("plane_normal", planenormal)
-
-        planedepth = make_depths(self.mpi_d, near, far).float()
-        if args.optimize_depth:
-            self.register_parameter("plane_depth", nn.Parameter(planedepth, requires_grad=True))
-        else:
-            self.register_buffer("plane_depth", planedepth)
-
-        mpi = torch.rand((1, self.mpi_d, 4, self.mpi_h, self.mpi_w))  # RGBA
-        mpi[:, :, -1] = -2
-
-        self.register_parameter("mpi", nn.Parameter(mpi, requires_grad=True))
-        self.tonemapping = activate[args.rgb_activate]
-
-    def forward(self, h, w, tar_extrins, tar_intrins):
-        ref_extrins = self.ref_extrin[None, ...].expand_as(tar_extrins)
-        ref_intrins = self.ref_intrin[None, ...].expand_as(tar_intrins)
-        homo = compute_homography(ref_extrins, ref_intrins, tar_extrins, tar_intrins,
-                                  self.plane_normal[None, ...], self.plane_depth)
-        mpi_warp = warp_homography(h, w, homo, self.tonemapping(self.mpi))
-
-        extra = {}
-        if self.training:
-            if self.args.sparsity_loss_weight > 0:
-                sparsity = mpi_warp[:, :, -1].mean()
-                extra["sparsity"] = sparsity.reshape(1, -1)
-        return overcomposeNto0(mpi_warp), extra
-
-
 class MPMesh(nn.Module):
     def __init__(self, args, H, W, ref_extrin, ref_intrin, near, far):
         super(MPMesh, self).__init__()
@@ -135,9 +89,9 @@ class MPMesh(nn.Module):
         atlas = torch.rand((1, args.atlas_cnl, int(self.atlas_h * scaling), int(self.atlas_w * scaling)))
 
         # -1, 1 to 0, h
-        uvs = uvs * 0.5 + 0.5
-        atlas_size = torch.tensor([int(self.atlas_w * scaling), int(self.atlas_h * scaling)]).reshape(-1, 2)
-        uvs *= (atlas_size - 1).type_as(uvs)
+        # uvs = uvs * 0.5 + 0.5
+        # atlas_size = torch.tensor([int(self.atlas_w * scaling), int(self.atlas_h * scaling)]).reshape(-1, 2)
+        # uvs *= (atlas_size - 1).type_as(uvs)
 
         self.register_parameter("uvs", nn.Parameter(uvs, requires_grad=True))
         self.register_buffer("uvfaces", faces.clone().long())
@@ -219,28 +173,29 @@ class MPMesh(nn.Module):
             self.optimize_geometry = True
 
         # decide upsample
-        if step in self.upsample_stage:
-            scaling = 0.5 ** (len(self.upsample_stage) - self.upsample_stage.index(step) - 1)
-            scaled_size = int(self.atlas_h * scaling), int(self.atlas_w * scaling)
-            print(f"  Upsample to {scaled_size} in step {step}")
-            self.register_parameter("atlas",
-                                    nn.Parameter(
-                                        torchf.upsample(self.atlas, scaled_size, mode='bilinear'),
-                                        requires_grad=True))
-            with torch.no_grad():
-                uv_scaling = torch.tensor([
-                    (scaled_size[1] - 1) / (self.atlas.shape[-1] - 1),
-                    (scaled_size[0] - 1) / (self.atlas.shape[-2] - 1),
-                ]).reshape(-1, 2).type_as(self.uvs)
-                self.uvs *= uv_scaling
+        # if step in self.upsample_stage:
+        #     scaling = 0.5 ** (len(self.upsample_stage) - self.upsample_stage.index(step) - 1)
+        #     scaled_size = int(self.atlas_h * scaling), int(self.atlas_w * scaling)
+        #     print(f"  Upsample to {scaled_size} in step {step}")
+        #     self.register_parameter("atlas",
+        #                             nn.Parameter(
+        #                                 torchf.upsample(self.atlas, scaled_size, mode='bilinear'),
+        #                                 requires_grad=True))
+        #     with torch.no_grad():
+        #         uv_scaling = torch.tensor([
+        #             (scaled_size[1] - 1) / (self.atlas.shape[-1] - 1),
+        #             (scaled_size[0] - 1) / (self.atlas.shape[-2] - 1),
+        #         ]).reshape(-1, 2).type_as(self.uvs)
+        #         self.uvs *= uv_scaling
 
     def save_mesh(self, prefix):
         vertices, faces, uvs = self.verts.detach(), self.faces.detach(), self.uvs.detach()
-        uv_scaling = torch.tensor([
-            1 / (self.atlas.shape[-1] - 1),
-            1 / (self.atlas.shape[-2] - 1)
-        ])
-        color = torch.cat([1 - uvs * uv_scaling, torch.zeros_like(uvs[:, :1])], dim=-1)
+        # uv_scaling = torch.tensor([
+        #     1 / (self.atlas.shape[-1] - 1),
+        #     1 / (self.atlas.shape[-2] - 1)
+        # ])
+        # color = torch.cat([1 - uvs * uv_scaling, torch.zeros_like(uvs[:, :1])], dim=-1)
+        color = torch.cat([0.5 - uvs * 0.5, torch.zeros_like(uvs[:, :1])], dim=-1)
         color = np.clip(color.cpu().numpy() * 255, 0, 255).astype(np.uint8)
         mesh1 = trimesh.Trimesh(vertices.cpu().numpy(), faces.cpu().numpy(),
                                 vertex_colors=color)
@@ -261,6 +216,9 @@ class MPMesh(nn.Module):
         texture = (rgba * 255).type(torch.uint8).reshape(self.atlas_h, self.atlas_w, 4).cpu().numpy()
         import imageio
         imageio.imwrite(prefix + ".png", texture)
+
+    def sparsify_faces(self):
+        pass
 
     @property
     def verts(self):
@@ -319,11 +277,12 @@ class MPMesh(nn.Module):
         ray_d = self.view_embed_fn(ray_d.reshape(-1, 3))
 
         # uv from 0, S - 1  to -1, 1
-        uv_scaling = torch.tensor([
-            2 / (self.atlas.shape[-1] - 1),
-            2 / (self.atlas.shape[-2] - 1)
-        ])
-        uvs = uvs * uv_scaling - 1
+        # uv_scaling = torch.tensor([
+        #     2 / (self.atlas.shape[-1] - 1),
+        #     2 / (self.atlas.shape[-2] - 1)
+        # ])
+        # uvs = uvs * uv_scaling - 1
+
         rgba_feat = torchf.grid_sample(self.atlas,
                                        uvs[None, None, ...],
                                        padding_mode="zeros")

@@ -19,6 +19,7 @@ pyr_num_step = 2000
 pyr_factor = 0.5
 
 # mpi configuration
+vid2img_mode = static
 mpi_h_scale = 1.2
 mpi_w_scale = 1.2
 mpi_h_verts = 23

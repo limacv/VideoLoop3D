@@ -19,7 +19,7 @@ from config_parser import config_parser
 from tqdm import tqdm, trange
 
 
-class MVPatchDataset(Dataset):
+class MVVidPatchDataset(Dataset):
     def __init__(self, resize_hw, videos, patch_size, patch_stride, poses, intrins):
         super().__init__()
         h_raw, w_raw, _ = videos[0][0].shape[-3:]
@@ -209,10 +209,10 @@ def train():
         nerf.module.lod(train_factor)
         optimizer = nerf.module.get_optimizer(step=0)
         # generate dataset and optimizer
-        dataset = MVPatchDataset(hw, videos,
-                                 (args.patch_h_size, args.patch_w_size),
-                                 (args.patch_h_stride, args.patch_w_stride),
-                                 poses, intrins)
+        dataset = MVVidPatchDataset(hw, videos,
+                                    (args.patch_h_size, args.patch_w_size),
+                                    (args.patch_h_stride, args.patch_w_stride),
+                                    poses, intrins)
         dataloader = DataLoader(dataset, 1, shuffle=True)
         for epoch_i in trange(num_step):
             for iter_i, datainfo in enumerate(dataloader):
