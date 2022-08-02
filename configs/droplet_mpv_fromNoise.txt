@@ -11,7 +11,7 @@ model_type = MPMesh
 pyr_minimal_dim = 60
 pyr_num_step = 600
 pyr_factor = 0.5
-mpv_init_from = /apdcephfs/private_leema/data/VideoLoops/logs/droplet_smth02_direct/texture003000.png
+init_from = /apdcephfs/private_leema/data/VideoLoops/logs/droplet_smth02_direct/texture003000.png
 mpv_frm_num = 30
 mpv_isloop
 swd_patch_size = 5
@@ -39,7 +39,7 @@ rgb_mlp_type = direct
 rgb_activate = sigmoid
 alpha_activate = sigmoid
 
-sparsity_loss_weight = 0.0001 #  to be adjusted
+sparsity_loss_weight = 0
 rgb_smooth_loss_weight = 0.2
 a_smooth_loss_weight = 0.2
 #d_smooth_loss_weight = 0.1

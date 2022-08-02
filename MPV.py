@@ -21,18 +21,7 @@ from pytorch3d.renderer import (
     TexturesUV,
     Textures
 )
-
-activate = {'relu': torch.relu,
-            'sigmoid': torch.sigmoid,
-            'unsigmoid': lambda x: torch.log(x.clamp(1e-6, 1 - 1e-6)/(1 - x.clamp(1e-6, 1 - 1e-6))),
-            'exp': torch.exp,
-            'none': lambda x: x,
-            'sigmoid1': lambda x: 1.002 / (torch.exp(-x) + 1) - 0.001,
-            'softplus': lambda x: nn.Softplus()(x - 1),
-            'tanh': torch.tanh,
-            'clamp': lambda x: torch.clamp(x, 0, 1),
-            'clamp_g': lambda x: x + (torch.clamp(x, 0, 1) - x).detach(),
-            'plus05': lambda x: x + 0.5}
+from MPI import ACTIVATES, MPMesh
 
 
 class MPMeshVid(nn.Module):
@@ -75,9 +64,9 @@ class MPMeshVid(nn.Module):
         # generate faces
         # ########################
         verts_indice = torch.arange(len(verts)).reshape(self.mpi_d, args.mpi_h_verts, args.mpi_w_verts)
-        faces013 = torch.stack([verts_indice[:, :-1, :-1], verts_indice[:, 1:, :-1], verts_indice[:, 1:, 1:]], -1)
-        faces320 = torch.stack([verts_indice[:, 1:, 1:], verts_indice[:, :-1, 1:], verts_indice[:, :-1, :-1]], -1)
-        faces = torch.cat([faces013.reshape(-1, 3), faces320.reshape(-1, 3)])
+        faces013 = torch.stack([verts_indice[:, :-1, :-1], verts_indice[:, :-1, 1:], verts_indice[:, 1:, 1:]], -1)
+        faces320 = torch.stack([verts_indice[:, 1:, 1:], verts_indice[:, 1:, :-1], verts_indice[:, :-1, :-1]], -1)
+        faces = torch.cat([faces013.reshape(-1, 1, 3), faces320.reshape(-1, 1, 3)], dim=1).reshape(-1, 3)
         
         # generate uv coordinate
         # ########################
@@ -143,11 +132,11 @@ class MPMeshVid(nn.Module):
             self.use_viewdirs = True
         else:
             raise RuntimeError(f"rgbmlp_type = {args.rgb_mlp_type} not recognized")
-        self.rgb_activate = activate[args.rgb_activate]
-        self.alpha_activate = activate[args.alpha_activate]
+        self.rgb_activate = ACTIVATES[args.rgb_activate]
+        self.alpha_activate = ACTIVATES[args.alpha_activate]
 
         # initialize self
-        self.initialize(args.mpv_init_from)
+        self.initialize(args.init_from)
 
         # the SWD Loss
         self.swd_patch_size = args.swd_patch_size
@@ -207,15 +196,15 @@ class MPMeshVid(nn.Module):
         elif os.path.exists(method) and method.endswith('.tar'):  # path to atlas
             self.load_state_dict(torch.load(method))
         elif os.path.exists(method) and method.endswith('.png'):  # path to atlas
-            assert self.rgb_activate is activate['sigmoid'] \
-                   and self.alpha_activate is activate['sigmoid'] \
+            assert self.rgb_activate is ACTIVATES['sigmoid'] \
+                   and self.alpha_activate is ACTIVATES['sigmoid'] \
                    and self.rgb_mlp_type == 'direct'
             atlas = imageio.imread(method)
             if atlas.shape[:2] != (self.atlas_h, self.atlas_w):
                 print(f"[WARNING] when initialize from {method}, "
                       f"resize from {atlas.shape[:2]} to {(self.atlas_h, self.atlas_w)}")
                 atlas = cv2.resize(atlas, (self.atlas_w, self.atlas_h), interpolation=cv2.INTER_AREA)
-            atlas = activate['unsigmoid'](torch.tensor(atlas) / 255)
+            atlas = ACTIVATES['unsigmoid'](torch.tensor(atlas) / 255)
             atlas = atlas.permute(2, 0, 1)[None].type_as(self.atlas)
             self.atlas.data[:] = atlas
             # self.atlas
@@ -237,7 +226,7 @@ class MPMeshVid(nn.Module):
         color = torch.cat([0.5 - uvs * 0.5, torch.zeros_like(uvs[:, :1])], dim=-1)
         color = np.clip(color.cpu().numpy() * 255, 0, 255).astype(np.uint8)
         mesh1 = trimesh.Trimesh(vertices.cpu().numpy(), faces.cpu().numpy(),
-                                vertex_colors=color)
+                                vertex_colors=color, process=False)
         txt = mesh1.export(prefix + ".obj", "obj")
         with open(prefix + ".obj", 'w') as f:
             f.write(txt)
@@ -324,13 +313,13 @@ class MPMeshVid(nn.Module):
         # dynamic part
         rgba_dyn = torchf.grid_sample(self.atlas_dyn[ts],
                                            uvs[None, None, ...].expand(F, 1, HxWxD, 2),
-                                           padding_mode="zeros")
+                                           padding_mode="zeros", align_corners=True)
         rgba_dyn = rgba_dyn.reshape(F, 4, -1).permute(0, 2, 1)
 
         # static part
         rgba_feat = torchf.grid_sample(self.atlas,
                                        uvs[None, None, ...],
-                                       padding_mode="zeros")
+                                       padding_mode="zeros", align_corners=True)
         rgba_feat = rgba_feat.reshape(1, self.atlas.shape[1], -1).permute(0, 2, 1)
         chunksz = self.args.chunk
         tex_input = torch.cat([rgba_feat, ray_d[None]], dim=-1).reshape(HxWxD, -1)

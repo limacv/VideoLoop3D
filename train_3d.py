@@ -42,6 +42,9 @@ class MVPatchDataset(Dataset):
         self.view_index = view_index.reshape(-1).tolist()
 
         self.images = []
+        # for debug only
+        # self.images = [torch.rand(3, self.h, self.w)] * self.v
+        # return
         for video in videos:
             vid = np.array([cv2.resize(img, (self.w, self.h)) for img in video]) / 255
             # mid
@@ -133,16 +136,7 @@ def train():
         raise RuntimeError(f"Unrecognized model type {args.model_type}")
 
     nerf = nn.DataParallel(nerf, list(range(args.gpu_num)))
-    if hasattr(nerf.module, "get_optimizer"):
-        print(f"Using {type(nerf)}'s get_optimizer()")
-        optimizer = nerf.module.get_optimizer()
-    else:
-        if args.optimizer == 'adam':
-            optimizer = torch.optim.Adam(params=nerf.parameters(), lr=args.lrate, betas=(0.9, 0.999))
-        elif args.optimizer == 'sgd':
-            optimizer = torch.optim.SGD(params=nerf.parameters(), lr=args.lrate, momentum=0.9)
-        else:
-            raise RuntimeError(f"Unrecongnized optimizer type {args.optimizer}")
+    optimizer = nerf.module.get_optimizer()
 
     render_extrins = pose2extrin_np(render_poses)
     render_extrins = torch.tensor(render_extrins).float()
@@ -231,6 +225,13 @@ def train():
     dataloader = DataLoader(dataset, 1, shuffle=True)
 
     for epoch_i in trange(args.N_iters):
+        if epoch_i == args.sparsify_epoch:
+            print("Sparsifying mesh models")
+            nerf.module.sparsify_faces()
+            print("Setting sparsity loss weight to 0")
+            nerf.module.args.sparsity_loss_weight = 0
+            optimizer = nerf.module.get_optimizer()
+
         for iter_i, datainfo in enumerate(dataloader):
             if hasattr(nerf.module, "update_step"):
                 nerf.module.update_step(iter_total_step)

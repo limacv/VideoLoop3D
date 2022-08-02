@@ -24,7 +24,7 @@ def config_parser():
                         help='frame number of the mpv')
     parser.add_argument("--mpv_isloop", action='store_true',
                         help='produce looping videos')
-    parser.add_argument("--mpv_init_from", type=str, default='',
+    parser.add_argument("--init_from", type=str, default='',
                         help='noise / <path to tar file> / prefix')
     parser.add_argument("--swd_patch_size", type=int, default=7,
                         help='produce looping videos')
@@ -43,6 +43,8 @@ def config_parser():
                         help='factor in each pyr level')
 
     # for mpi
+    parser.add_argument("--sparsify_epoch", type=int, default=-1,
+                        help='sparsify the MPMesh in epoch')
     parser.add_argument("--vid2img_mode", type=str, default='average',
                         help='choose among average, median, static, dynamic')
     parser.add_argument("--mpi_h_scale", type=float, default=1.4,
@@ -97,7 +99,7 @@ def config_parser():
                         help='as rigid as possible smooth loss')
 
     # training options
-    parser.add_argument("--N_iters", type=int, default=50000)
+    parser.add_argument("--N_iters", type=int, default=30)
     parser.add_argument("--optimizer", type=str, default='adam', choices=['adam', 'sgd'],
                         help='optmizer')
     parser.add_argument("--netdepth", type=int, default=8,

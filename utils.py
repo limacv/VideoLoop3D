@@ -270,6 +270,16 @@ def gaussian(img, kernel_size):
     return GaussianBlur(kernel_size)(img)
 
 
+def dilate(alpha: torch.Tensor, kernelsz=3, dilate=1):
+    """
+    alpha: B x L x H x W
+    """
+    padding = (dilate * (kernelsz - 1) + 1) // 2
+    batchsz, layernum, hei, wid = alpha.shape
+    alphaunfold = torch.nn.Unfold(kernelsz, dilation=dilate, padding=padding, stride=1)(alpha.reshape(-1, 1, hei, wid))
+    alphaunfold = alphaunfold.max(dim=1)[0]
+    return alphaunfold.reshape_as(alpha)
+
 # visualize the flow
 # ======================================================================================
 max_flow_thresh = 1e10
