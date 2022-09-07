@@ -23,6 +23,12 @@ def _load_data(basedir, factor=None, width=None, height=None, load_imgs=True):
     else:
         factor = 1
 
+    poses[:2, 4, :] = poses[:2, 4, :] / factor  # hw
+    poses[2, 4, :] = poses[2, 4, :] / factor  # intrin
+
+    if not load_imgs:
+        return poses, bds, None
+
     imgdir = os.path.join(basedir, 'images' + sfx)
     if not os.path.exists(imgdir):
         print(imgdir, 'does not exist, returning')
@@ -34,28 +40,22 @@ def _load_data(basedir, factor=None, width=None, height=None, load_imgs=True):
         print('Mismatch between imgs {} and poses {} !!!!'.format(len(imgfiles), poses.shape[-1]))
         return
 
-    sh = imageio.imread(imgfiles[0]).shape
-    poses[:2, 4, :] = np.array(sh[:2]).reshape([2, 1])
-    poses[2, 4, :] = poses[2, 4, :] * 1. / factor
-
-    if not load_imgs:
-        return poses, bds
-
     def imread(f):
         if f.endswith('png'):
             return imageio.imread(f, ignoregamma=True)
         else:
             return imageio.imread(f)
 
-    imgs = imgs = [imread(f)[..., :3] / 255. for f in imgfiles]
+    imgs = [imread(f)[..., :3] / 255. for f in imgfiles]
     imgs = np.stack(imgs, -1)
 
     print('Loaded image data', imgs.shape, poses[:, -1, 0])
     return poses, bds, imgs
 
 
-def load_llff_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=False, path_epi=False):
-    poses, bds, imgs = _load_data(basedir, factor=factor)  # factor=8 downsamples original imgs by 8x
+def load_llff_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=False, path_epi=False, load_img=True):
+    poses, bds, imgs = _load_data(basedir, factor=factor, load_imgs=load_img)
+    # factor=8 downsamples original imgs by 8x
     print('Loaded', basedir, bds.min(), bds.max())
     # for debug only
     # selected_idx = [0, 1, 2, 9, 8, 7, 10, 11, 19, 18]
@@ -66,8 +66,7 @@ def load_llff_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=Fal
     # Correct rotation matrix ordering and move variable dim to axis 0
     poses = np.concatenate([poses[:, 1:2, :], poses[:, 0:1, :], -poses[:, 2:3, :], poses[:, 3:, :]], 1)
     poses = np.moveaxis(poses, -1, 0).astype(np.float32)
-    imgs = np.moveaxis(imgs, -1, 0).astype(np.float32)
-    images = imgs
+    imgs = np.moveaxis(imgs, -1, 0).astype(np.float32) if imgs is not None else None
     bds = np.moveaxis(bds, -1, 0).astype(np.float32)
 
     # Rescale if bd_factor is provided
@@ -115,7 +114,6 @@ def load_llff_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=Fal
 
     render_poses = np.array(render_poses).astype(np.float32)
 
-    images = images.astype(np.float32)
     poses = poses.astype(np.float32)
 
     H, W, focal = poses[:, :3, -1].T
@@ -128,11 +126,12 @@ def load_llff_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=Fal
     intrins[:, 1, 2] = 0.5 * H
 
     render_intrins = np.repeat(intrins[:1, ...], len(render_poses), 0)
-    return images, poses, intrins, bds, render_poses, render_intrins
+    return imgs, poses, intrins, bds, render_poses, render_intrins
 
 
 def load_mv_videos(basedir, factor=1, recenter=True, bd_factor=.75):
-    _, poses, intrins, bds, render_poses, render_intrins = load_llff_data(basedir, factor, recenter, bd_factor)
+    _, poses, intrins, bds, render_poses, render_intrins = load_llff_data(basedir, factor, recenter, bd_factor,
+                                                                          load_img=False)
     videos_path = sorted(glob.glob(basedir + f"/videos_{factor}/*"))
     videos = [imageio.mimread(vp) for vp in videos_path]
     return videos, poses, intrins, bds, render_poses, render_intrins

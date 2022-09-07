@@ -26,9 +26,15 @@ def config_parser():
                         help='produce looping videos')
     parser.add_argument("--init_from", type=str, default='',
                         help='noise / <path to tar file> / prefix')
+    parser.add_argument("--swd_loss_type", type=str, default='swd',
+                        help='choose among swd, gpnn, mse')
     parser.add_argument("--swd_patch_size", type=int, default=7,
                         help='produce looping videos')
     parser.add_argument("--swd_patcht_size", type=int, default=7,
+                        help='produce looping videos')
+    parser.add_argument("--swd_stride", type=int, default=1,
+                        help='produce looping videos')
+    parser.add_argument("--swd_stridet", type=int, default=1,
                         help='produce looping videos')
     parser.add_argument("--swd_num_proj", type=int, default=128,
                         help='produce looping videos')
@@ -118,6 +124,8 @@ def config_parser():
                         help='number of pts sent through network in parallel, decrease if running out of memory')
     parser.add_argument("--lrate", type=float, default=5e-4,
                         help='learning rate')
+    parser.add_argument("--lrate_adaptive", action='store_true',
+                        help='adaptively adjust learning rate based on patch size')
     parser.add_argument("--lrate_decay", type=int, default=30,
                         help='exponential learning rate decay (in 1000 steps)')
 

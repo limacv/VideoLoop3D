@@ -10,7 +10,7 @@ from utils import *
 from NeRF_modules import get_embedder
 from utils_mpi import *
 import trimesh
-from utils_vid import Patch3DSWDLoss
+from utils_vid import Patch3DSWDLoss, Patch3DGPNNDirectLoss, Patch3DMSE
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer import (
     look_at_view_transform,
@@ -141,12 +141,23 @@ class MPMeshVid(nn.Module):
         # the SWD Loss
         self.swd_patch_size = args.swd_patch_size
         self.swd_patcht_size = args.swd_patcht_size
-        self.swd_loss = Patch3DSWDLoss(
-            patch_size=self.swd_patch_size,
-            patcht_size=self.swd_patcht_size, stride=1,
-            num_proj=args.swd_num_proj, use_convs=True, mask_patches_factor=0,
-            roi_region_pct=1
-        )
+        self.swd_stride = args.swd_stride
+        self.swd_stridet = args.swd_stridet
+        if args.swd_loss_type == 'swd':
+            self.swd_loss = Patch3DSWDLoss(
+                patch_size=self.swd_patch_size,
+                patcht_size=self.swd_patcht_size, stride=self.swd_stride, stridet=self.swd_stridet,
+                num_proj=args.swd_num_proj, use_convs=True, mask_patches_factor=0,
+                roi_region_pct=1
+            )
+        elif args.swd_loss_type == 'gpnn':
+            self.swd_loss = Patch3DGPNNDirectLoss(
+                patch_size=self.swd_patch_size,
+                patcht_size=self.swd_patcht_size,
+                stride=self.swd_stride, stridet=self.swd_stridet,
+            )
+        elif args.swd_loss_type == 'mse':
+            self.swd_loss = Patch3DMSE()
 
     def lod(self, factor):
         h, w = int(self.atlas_h * factor), int(self.atlas_w * factor)
@@ -364,7 +375,8 @@ class MPMeshVid(nn.Module):
             if self.isloop:
                 pad_frame = self.swd_patcht_size - 1
                 rgb_pad = torch.cat([rgb, rgb[:pad_frame]], 0)
-            swd_loss = self.swd_loss(rgb_pad.permute(1, 0, 2, 3)[None] * 2 - 1, res.permute(0, 2, 1, 3, 4) * 2 - 1)
+            swd_loss = self.swd_loss(rgb_pad.permute(1, 0, 2, 3)[None],
+                                     res.permute(0, 2, 1, 3, 4))
             extra['swd'] = swd_loss.reshape(1, -1)
 
             if self.args.sparsity_loss_weight > 0:

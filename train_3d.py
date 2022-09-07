@@ -97,7 +97,6 @@ def train():
                                                                                factor=args.factor,
                                                                                bd_factor=args.bd_factor,
                                                                                recenter=True)
-
     H, W = videos[0][0].shape[0:2]
     V = len(videos)
     print('Loaded llff', V, H, W, poses.shape, intrins.shape, render_poses.shape, bds.shape)

@@ -216,11 +216,15 @@ def train():
         dataloader = DataLoader(dataset, 1, shuffle=True)
         for epoch_i in trange(num_step):
             for iter_i, datainfo in enumerate(dataloader):
+
                 if hasattr(nerf.module, "update_step"):
                     nerf.module.update_step(epoch_total_step)
 
                 # update learning rate
                 name_lrates = nerf.module.get_lrate(epoch_i)
+
+                if args.lrate_adaptive:
+                    name_lrates = [(n_, lr_ / len(dataset)) for n_, lr_ in name_lrates]
 
                 for (lrname, new_lrate), param_group in zip(name_lrates, optimizer.param_groups):
                     param_group['lr'] = new_lrate

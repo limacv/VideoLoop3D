@@ -1,7 +1,7 @@
 gpu_num = 1
 # Dataset related
-expname = droplet720p_dyn_smth02
-datadir = /apdcephfs/private_leema/data/VideoLoops/data/droplet720p/
+expname = synwater_avg_smth02
+datadir = /apdcephfs/private_leema/data/VideoLoops/data/synwater640p/
 expdir  = /apdcephfs/private_leema/data/VideoLoops/logs
 factor = 2
 bd_factor = 0.75
@@ -9,12 +9,12 @@ seed = 2
 model_type = MPMesh
 
 # mpi configuration
-vid2img_mode = dynamic
+vid2img_mode = average
 mpi_h_scale = 1.2
 mpi_w_scale = 1.2
-mpi_h_verts = 23
-mpi_w_verts = 40
-mpi_d = 16
+mpi_h_verts = 27
+mpi_w_verts = 48
+mpi_d = 64
 atlas_cnl = 4
 atlas_grid_h = 4
 atlas_size_scale = 1

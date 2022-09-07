@@ -249,6 +249,10 @@ class MPMesh(nn.Module):
         import imageio
         imageio.imwrite(prefix + ".png", texture)
 
+    # @torch.no_grad()
+    # def direct2sh(self):
+
+
     @torch.no_grad()
     def sparsify_faces(self, alpha_thresh=0.03):
         print("Sparsifying the faces")

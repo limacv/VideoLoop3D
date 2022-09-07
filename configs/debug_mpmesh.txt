@@ -1,9 +1,9 @@
 gpu_num = 1
 # Dataset related
 expname = debug
-datadir = M:\VideoLoops\data\droplet640p
+datadir = M:\VideoLoops\data\synwater640p
 expdir  = M:\VideoLoops\logs
-factor = 1
+factor = 2
 seed = 2
 model_type = MPMesh
 init_from = M:\VideoLoops\logs\droplet_avg_smth02_direct\texture002500.png
@@ -11,6 +11,7 @@ init_from = M:\VideoLoops\logs\droplet_avg_smth02_direct\texture002500.png
 # mpv configuration
 mpv_frm_num = 5
 mpv_isloop
+swd_loss_type = gpnn
 swd_patch_size = 7
 swd_patcht_size = 7
 
@@ -39,6 +40,7 @@ patch_h_stride = 32
 patch_w_stride = 32
 lrate = 1
 lrate_decay = 30
+lrate_adaptive
 rgb_mlp_type = direct
 rgb_activate = sigmoid
 alpha_activate = sigmoid

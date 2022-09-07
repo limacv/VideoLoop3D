@@ -3,9 +3,6 @@ from glob import glob
 
 files = [
     "droplet_mpv_fromNoise"
-    # "simplevid_pinatas4",
-    # "simplevid_squareflags3"
-    # "simplevid_brink2down_nopyr"
 ]
 
 files = [file + ".txt" for file in files]

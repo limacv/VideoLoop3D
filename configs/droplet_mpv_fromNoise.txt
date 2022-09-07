@@ -1,9 +1,10 @@
 gpu_num = 1
 # Dataset related
-expname = MPV_droplet_smth02_noise
-datadir = /apdcephfs/private_leema/data/VideoLoops/data/droplet640p/
+expname = MPVgpnn_droplet720p_f60_smth02_adalr
+datadir = /apdcephfs/private_leema/data/VideoLoops/data/droplet720p/
 expdir  = /apdcephfs/private_leema/data/VideoLoops/logs
-factor = 1
+factor = 2
+bd_factor = 0.75
 seed = 2
 model_type = MPMesh
 
@@ -11,18 +12,21 @@ model_type = MPMesh
 pyr_minimal_dim = 60
 pyr_num_step = 600
 pyr_factor = 0.5
-init_from = /apdcephfs/private_leema/data/VideoLoops/logs/droplet_smth02_direct/texture003000.png
-mpv_frm_num = 30
+init_from = /apdcephfs/private_leema/data/VideoLoops/logs/droplet720p_avg_smth02/texture003500.png
+mpv_frm_num = 60
 mpv_isloop
+swd_loss_type = gpnn
 swd_patch_size = 5
 swd_patcht_size = 5
+swd_stride = 2
+swd_stridet = 2
 
 # mpi configuration
 mpi_h_scale = 1.2
 mpi_w_scale = 1.2
 mpi_h_verts = 23
 mpi_w_verts = 40
-mpi_d = 16
+mpi_d = 20
 atlas_cnl = 4
 atlas_grid_h = 4
 atlas_size_scale = 1
@@ -33,8 +37,9 @@ patch_h_size = 64
 patch_w_size = 64
 patch_h_stride = 32
 patch_w_stride = 32
-lrate = 0.01
+lrate = 0.1
 lrate_decay = 100
+lrate_adaptive
 rgb_mlp_type = direct
 rgb_activate = sigmoid
 alpha_activate = sigmoid
