@@ -1,6 +1,6 @@
 gpu_num = 1
 # Dataset related
-expname = droplet720p_dyn_smth02
+expname = droplet720p_blur11_smth02
 datadir = /apdcephfs/private_leema/data/VideoLoops/data/droplet720p/
 expdir  = /apdcephfs/private_leema/data/VideoLoops/logs
 factor = 2
@@ -9,9 +9,9 @@ seed = 2
 model_type = MPMesh
 
 # mpi configuration
-vid2img_mode = dynamic
-mpi_h_scale = 1.2
-mpi_w_scale = 1.2
+vid2img_mode = blur11
+mpi_h_scale = 1.1
+mpi_w_scale = 1.1
 mpi_h_verts = 23
 mpi_w_verts = 40
 mpi_d = 16

@@ -1,12 +1,11 @@
 gpu_num = 1
 # Dataset related
 expname = debug
-datadir = M:\VideoLoops\data\synwater640p
+datadir = M:\VideoLoops\data\droplet720p
 expdir  = M:\VideoLoops\logs
 factor = 2
 seed = 2
 model_type = MPMesh
-init_from = M:\VideoLoops\logs\droplet_avg_smth02_direct\texture002500.png
 
 # mpv configuration
 mpv_frm_num = 5
@@ -21,7 +20,7 @@ pyr_factor = 0.5
 
 # mpi configuration
 sparsify_epoch = 0
-vid2img_mode = static
+vid2img_mode = blur
 mpi_h_scale = 1.2
 mpi_w_scale = 1.2
 mpi_h_verts = 23
@@ -33,7 +32,6 @@ atlas_size_scale = 1
 
 # Training related
 N_iters = 3000
-# upsample_stage = 1,2,3
 patch_h_size = 32
 patch_w_size = 32
 patch_h_stride = 32

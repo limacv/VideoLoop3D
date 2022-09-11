@@ -53,13 +53,23 @@ class MVPatchDataset(Dataset):
             elif self.mode == 'average':
                 # aveage
                 img = vid.mean(axis=0)
-            elif self.mode in ['dynamic', 'static']:
+            elif self.mode.startswith('dynamic'):
                 # emphsize the dynamics
                 weight = np.linalg.norm(vid - vid.mean(axis=0, keepdims=True), axis=-1, keepdims=True)
-                weight = weight ** 2
-                if self.mode == 'static':
-                    weight = 1 - weight
-                img = (vid * weight).sum(axis=0) / np.clip(weight.sum(axis=0), 1e-10, 999999)
+                k = self.mode.lstrip('dynamic')
+                k = 1 if len(k) == 0 else float(k)
+                weight = k * weight + (1 - k)
+                weight = np.clip(weight, 1e-10, 999999)
+                img = (vid * weight).sum(axis=0) / weight.sum(axis=0)
+            elif self.mode.startswith('blur'):
+                b = self.mode.lstrip('blur')
+                b = 11 if len(b) == 0 else int(b)
+                vid_blur = np.array([cv2.GaussianBlur(v_, (b, b), 0) for v_ in vid])
+                vid_blur_avg = vid_blur.mean(axis=0, keepdims=True)
+                weight = np.linalg.norm(vid_blur - vid_blur_avg, axis=-1, keepdims=True)
+                weight = np.clip(weight * 3, 0.01, 1)
+                vid_dynblur = vid_blur * weight + vid * (1 - weight)
+                img = (vid_dynblur * weight).sum(axis=0) / weight.sum(axis=0)
             else:
                 raise RuntimeError(f"Unrecognized vid2img_mode={self.mode}")
 
@@ -203,8 +213,8 @@ def train():
                 writer.add_scalar(f'lr/{name}', newlr, stepi)
 
         if stepi % args.i_print == 0:
-            print(f"[TRAIN] Iter: {stepi} Loss: {loss.item():.4f} PSNR: {psnr.item():.4f}",
-                  "|".join([f"{k}: {v.item():.4f}" for k, v in extra_losses.items()]))
+            epoch_tqdm.set_description(f"[TRAIN] Iter: {stepi} Loss: {loss.item():.4f} PSNR: {psnr.item():.4f}",
+                                       "|".join([f"{k}: {v.item():.4f}" for k, v in extra_losses.items()]))
     # end of run one iteration
 
     # ##########################
@@ -223,7 +233,8 @@ def train():
         imageio.imwrite(p, to8b(img.permute(1, 2, 0).cpu().numpy()))
     dataloader = DataLoader(dataset, 1, shuffle=True)
 
-    for epoch_i in trange(args.N_iters):
+    epoch_tqdm = trange(args.N_iters)
+    for epoch_i in epoch_tqdm:
         if epoch_i == args.sparsify_epoch:
             print("Sparsifying mesh models")
             nerf.module.sparsify_faces()

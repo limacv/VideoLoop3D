@@ -86,55 +86,35 @@ class MPMesh(nn.Module):
         uvs_voxel = torch.stack(uvs_voxel[::-1], dim=-1).reshape(1, -1, 2) * uvs_voxel_size
         uvs = (uvs_plane.reshape(-1, 1, 2) + uvs_voxel.reshape(1, -1, 2)).reshape(-1, 2)
 
-        scaling = 0.5 ** len(self.upsample_stage)
-        atlas = torch.rand((1, args.atlas_cnl, int(self.atlas_h * scaling), int(self.atlas_w * scaling)))
-
-        # -1, 1 to 0, h
-        # uvs = uvs * 0.5 + 0.5
-        # atlas_size = torch.tensor([int(self.atlas_w * scaling), int(self.atlas_h * scaling)]).reshape(-1, 2)
-        # uvs *= (atlas_size - 1).type_as(uvs)
-
-        self.register_parameter("uvs", nn.Parameter(uvs, requires_grad=True))
         self.register_buffer("uvfaces", faces.clone().long())
         self._verts = nn.Parameter(verts, requires_grad=True)
         self.register_buffer("faces", faces.long())
         self.optimize_geometry = False
-        self.register_parameter("atlas", nn.Parameter(atlas, requires_grad=True))
+        self.register_parameter("uvs", nn.Parameter(uvs, requires_grad=True))
 
+        # configure and initializing the atlas
         self.view_embed_fn, self.view_cnl = get_embedder(args.multires_views, input_dim=3)
         self.rgb_mlp_type = args.rgb_mlp_type
         if args.rgb_mlp_type == "direct":
             self.feat2rgba = lambda x: x[..., :4]
+            atlas_cnl = 4
+            atlas = torch.rand((1, atlas_cnl, int(self.atlas_h), int(self.atlas_w)))
             atlas[:, -1] = -2
             self.use_viewdirs = False
-        elif args.rgb_mlp_type == "rgbamlp":
-            self.feat2rgba = nn.Sequential(
-                nn.Linear(self.view_cnl + args.atlas_cnl, 48), nn.ReLU(),
-                nn.Linear(48, 4)
-            )
-            self.feat2rgba[-2].bias.data[-1] = -2
-            self.use_viewdirs = True
-        elif args.rgb_mlp_type == "rgbmlp":
-            self.feat2rgba = Feat2RGBMLP_alpha(args.atlas_cnl, self.view_cnl)
-            self.use_viewdirs = True
-            atlas[:, 0] = -2
-        elif args.rgb_mlp_type == "rgbanex":
-            self.feat2rgba = NeX_RGBA(args.atlas_cnl, self.view_cnl)
-            self.use_viewdirs = True
-        elif args.rgb_mlp_type == "rgbnex":
-            self.feat2rgba = NeX_RGB(args.atlas_cnl, self.view_cnl)
-            self.use_viewdirs = True
-            atlas[:, 0] = -2
         elif args.rgb_mlp_type == "rgb_sh":
-            assert self.args.atlas_cnl == 3 * 9 + 1  # one for alpha, 9 for base
-            self.feat2rgba = SphericalHarmoic_RGB(args.atlas_cnl, self.view_cnl)
+            atlas_cnl = 3 * 9 + 1  # one for alpha, 9 for base
+            atlas = torch.rand((1, atlas_cnl, int(self.atlas_h), int(self.atlas_w)))
+            self.feat2rgba = SphericalHarmoic_RGB(atlas_cnl, self.view_cnl)
             self.use_viewdirs = True
         elif args.rgb_mlp_type == "rgba_sh":
-            assert self.args.atlas_cnl == 4 * 9  # 9 for each channel
-            self.feat2rgba = SphericalHarmoic_RGBA(args.atlas_cnl, self.view_cnl)
+            atlas_cnl = 4 * 9  # 9 for each channel
+            atlas = torch.rand((1, atlas_cnl, int(self.atlas_h), int(self.atlas_w)))
+            self.feat2rgba = SphericalHarmoic_RGBA(atlas_cnl, self.view_cnl)
             self.use_viewdirs = True
         else:
             raise RuntimeError(f"rgbmlp_type = {args.rgb_mlp_type} not recognized")
+
+        self.register_parameter("atlas", nn.Parameter(atlas, requires_grad=True))
         self.rgb_activate = ACTIVATES[args.rgb_activate]
         self.alpha_activate = ACTIVATES[args.alpha_activate]
 
@@ -237,7 +217,7 @@ class MPMesh(nn.Module):
     @torch.no_grad()
     def save_texture(self, prefix):
         _, atlas_cnl, atlas_h, atlas_w = self.atlas.shape
-        texture = self.atlas.detach()[0].permute(1, 2, 0).reshape(-1, self.args.atlas_cnl)
+        texture = self.atlas.detach()[0].permute(1, 2, 0).reshape(-1, self.atlas.shape[1])
         ray_dir = torch.tensor([[0, 0, 1.]]).type_as(texture).expand(len(texture), -1)
         ray_dir = self.view_embed_fn(ray_dir)
         tex_input = torch.cat([texture, ray_dir], dim=-1)
@@ -251,7 +231,6 @@ class MPMesh(nn.Module):
 
     # @torch.no_grad()
     # def direct2sh(self):
-
 
     @torch.no_grad()
     def sparsify_faces(self, alpha_thresh=0.03):
@@ -277,7 +256,7 @@ class MPMesh(nn.Module):
         grid = uv_v0 + grid_offset
 
         # get alpha atlas for deciding mask
-        texture = self.atlas.detach()[0].permute(1, 2, 0).reshape(-1, self.args.atlas_cnl)
+        texture = self.atlas.detach()[0].permute(1, 2, 0).reshape(-1, self.atlas.shape[1])
         ray_dir = torch.tensor([[0, 0, 1.]]).type_as(texture).expand(len(texture), -1)
         ray_dir = self.view_embed_fn(ray_dir)
         tex_input = torch.cat([texture, ray_dir], dim=-1)
