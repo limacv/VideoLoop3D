@@ -80,7 +80,8 @@ class MPMeshVid(nn.Module):
 
         scaling = 1
         atlas = torch.rand((1, args.atlas_cnl, int(self.atlas_h * scaling), int(self.atlas_w * scaling)))
-        atlas_dyn = torch.randn((self.frm_num, 4, int(self.atlas_h * scaling), int(self.atlas_w * scaling))) * 0.02
+        atlas_dyn = torch.randn((self.frm_num, 4, int(self.atlas_h * scaling), int(self.atlas_w * scaling))) \
+                    * args.init_std
 
         # -1, 1 to 0, h
         # uvs = uvs * 0.5 + 0.5
@@ -100,7 +101,6 @@ class MPMeshVid(nn.Module):
         if self.rgb_mlp_type == "direct":
             self.feat2rgba = lambda x: x[..., :4]
             self.atlas.data[:, -1] = -2
-            self.atlas_dyn.data[:, -1] = -2
             self.use_viewdirs = False
         elif self.rgb_mlp_type == "rgbamlp":
             self.feat2rgba = nn.Sequential(
@@ -113,7 +113,6 @@ class MPMeshVid(nn.Module):
             self.feat2rgba = Feat2RGBMLP_alpha(args.atlas_cnl, self.view_cnl)
             self.use_viewdirs = True
             self.atlas.data[:, 0] = -2
-            self.atlas_dyn.data[:, 0] = -2
         elif self.rgb_mlp_type == "rgbanex":
             self.feat2rgba = NeX_RGBA(args.atlas_cnl, self.view_cnl)
             self.use_viewdirs = True
@@ -121,7 +120,6 @@ class MPMeshVid(nn.Module):
             self.feat2rgba = NeX_RGB(args.atlas_cnl, self.view_cnl)
             self.use_viewdirs = True
             self.atlas.data[:, 0] = -2
-            self.atlas_dyn.data[:, 0] = -2
         elif self.rgb_mlp_type == "rgb_sh":
             assert self.args.atlas_cnl == 3 * 9 + 1  # one for alpha, 9 for base
             self.feat2rgba = SphericalHarmoic_RGB(args.atlas_cnl, self.view_cnl)
@@ -154,13 +152,14 @@ class MPMeshVid(nn.Module):
             self.swd_loss = Patch3DGPNNDirectLoss(
                 patch_size=self.swd_patch_size,
                 patcht_size=self.swd_patcht_size,
-                stride=self.swd_stride, stridet=self.swd_stridet,
+                stride=self.swd_stride, stridet=self.swd_stridet
             )
         elif args.swd_loss_type == 'mse':
             self.swd_loss = Patch3DMSE()
 
     def lod(self, factor):
         h, w = int(self.atlas_h * factor), int(self.atlas_w * factor)
+        print(f"MPV.log(): Resizing the atlas from {self.atlas.shape[-2:]} to {(h, w)}")
         new_atlas = torchvision.transforms.Resize((h, w))(self.atlas.data)
         new_atlas_dyn = torchvision.transforms.Resize((h, w))(self.atlas_dyn.data)
         self.register_parameter("atlas", nn.Parameter(new_atlas, requires_grad=True))
@@ -360,7 +359,7 @@ class MPMeshVid(nn.Module):
         }
         return rgb[..., :3], variables
 
-    def forward(self, h, w, tar_extrins, tar_intrins, ts=None, res=None):
+    def forward(self, h, w, tar_extrins, tar_intrins, ts=None, res=None, alpha=1e10):
         extrins = tar_extrins @ self.ref_extrin[None, ...].inverse()
 
         if ts is None:
@@ -375,8 +374,15 @@ class MPMeshVid(nn.Module):
             if self.isloop:
                 pad_frame = self.swd_patcht_size - 1
                 rgb_pad = torch.cat([rgb, rgb[:pad_frame]], 0)
-            swd_loss = self.swd_loss(rgb_pad.permute(1, 0, 2, 3)[None],
-                                     res.permute(0, 2, 1, 3, 4))
+
+            alpha = alpha.item()
+            if alpha >= 0:
+                swd_loss = self.swd_loss(rgb_pad.permute(1, 0, 2, 3)[None],
+                                         res.permute(0, 2, 1, 3, 4), alpha=alpha)
+            else:
+                mean_loss = (rgb_pad.mean(dim=0)[None] - res.mean(dim=1)).abs().mean()
+                # std_loss = (rgb_pad.std(dim=0)[None] - res.std(dim=1)).abs().mean()
+                swd_loss = mean_loss + std_loss
             extra['swd'] = swd_loss.reshape(1, -1)
 
             if self.args.sparsity_loss_weight > 0:

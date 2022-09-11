@@ -2,7 +2,22 @@ import os
 from glob import glob
 
 files = [
-    "droplet_mpv_fromNoise"
+    # "droplet_mpv_avgview",
+    # "droplet_mpv_alpha00001",
+    # "droplet_mpv_alpha0001",
+    # "droplet_mpv_alpha001",
+    # "mirrorwater_mpv",
+    # "mirrorwater_mpv_oneview",
+    "mirrorwater_mpv_avgview",
+    # "stairwater_mpv",
+    # "stairwater_mpv_oneview",
+    "stairwater_mpv_avgview",
+    # "waterwall_mpv",
+    # "waterwall_mpv_oneview",
+    # "waterwall_mpv_avgview",
+    # "stair2water_mpv",
+    # "stair2water_mpv_oneview",
+    "stair2water_mpv_avgview",
 ]
 
 files = [file + ".txt" for file in files]

@@ -20,7 +20,8 @@ from tqdm import tqdm, trange
 
 
 class MVVidPatchDataset(Dataset):
-    def __init__(self, resize_hw, videos, patch_size, patch_stride, poses, intrins):
+    def __init__(self, resize_hw, videos, patch_size, patch_stride, poses, intrins,
+                 alphas=None):
         super().__init__()
         h_raw, w_raw, _ = videos[0][0].shape[-3:]
         self.h, self.w = resize_hw
@@ -40,6 +41,9 @@ class MVVidPatchDataset(Dataset):
         view_index = np.arange(self.v)[:, None, None].repeat(patch_wh_start.shape[1], axis=1)
         self.patch_wh_start = patch_wh_start.reshape(-1, 2).cpu()
         self.view_index = view_index.reshape(-1).tolist()
+        self.alphas = [1e10] * self.v if alphas is None else alphas
+        assert len(alphas) == self.v
+        self.alphas = torch.tensor(self.alphas).type_as(intrins)
 
         self.videos = []
         for video in videos:
@@ -59,8 +63,8 @@ class MVVidPatchDataset(Dataset):
         pose = self.poses[view_idx]
         intrin = get_new_intrin(self.intrins[view_idx], h_start, w_start).float()
         crops = self.videos[view_idx][..., h_start: h_start + self.patch_h_size, w_start: w_start + self.patch_w_size]
-
-        return w_start, h_start, pose, intrin, crops.cuda()
+        alpha = self.alphas[view_idx]
+        return w_start, h_start, pose, intrin, crops.cuda(), alpha
 
 
 def train():
@@ -91,21 +95,21 @@ def train():
     ref_near, ref_far = bds[:, 0].min(), bds[:, 1].max()
 
     # Resove pyramid related configs, controled by (pyr_stage, pyr_factor, N_iters)
-    #                                           or (pyr_minimal_dim, pyr_factor, pyr_num_step)
+    #                                           or (pyr_minimal_dim, pyr_factor, pyr_num_epoch)
     if args.pyr_minimal_dim < 0:
         # store the iter_num when starting the stage
         pyr_stages = list(map(int, args.pyr_stage.split(','))) if len(args.pyr_stage) > 0 else []
         pyr_stages = np.array([0] + pyr_stages + [args.N_iters])  # one default stage
-        pyr_num_step = pyr_stages[1:] - pyr_stages[:-1]
-        pyr_factors = [args.pyr_factor ** i for i in list(range(len(pyr_num_step)))[::-1]]
+        pyr_num_epoch = pyr_stages[1:] - pyr_stages[:-1]
+        pyr_factors = [args.pyr_factor ** i for i in list(range(len(pyr_num_epoch)))[::-1]]
         pyr_hw = [(int(H * f), int(W * f)) for f in pyr_factors]
     else:
         num_stage = int(np.log(args.pyr_minimal_dim / min(H, W)) / np.log(args.pyr_factor)) + 1
         pyr_factors = [args.pyr_factor ** i for i in list(range(num_stage))[::-1]]
         pyr_hw = [(int(H * f), int(W * f)) for f in pyr_factors]
-        pyr_num_step = [args.pyr_num_step] * num_stage
+        pyr_num_epoch = [args.pyr_num_epoch] * num_stage
     print("Pyramid info: ")
-    for leveli, (f_, hw_, num_step_) in enumerate(zip(pyr_factors, pyr_hw, pyr_num_step)):
+    for leveli, (f_, hw_, num_step_) in enumerate(zip(pyr_factors, pyr_hw, pyr_num_epoch)):
         print(f"    level {leveli}: factor {f_} [{hw_[0]} x {hw_[1]}] run for {num_step_} iterations")
     # end of pyramid infomation
 
@@ -144,6 +148,10 @@ def train():
     poses = torch.tensor(poses)
     intrins = torch.tensor(intrins)
 
+    # figuring out the alpha value
+    swd_alphas = [args.swd_alpha_other] * V
+    swd_alphas[args.swd_alpha_ref_idx] = args.swd_alpha_ref
+
     ##########################
     # initialize the MPV
     # ckpts = [os.path.join(args.expdir, args.expname, f)
@@ -163,12 +171,12 @@ def train():
 
     # begin of run one iteration (one patch)
     def run_iter(stepi, optimizer_, datainfo_):
-        h_starts, w_starts, b_pose, b_intrin, b_rgbs = datainfo_
+        h_starts, w_starts, b_pose, b_intrin, b_rgbs, swd_alpha = datainfo_
         b_extrin = pose2extrin_torch(b_pose)
         patch_h, patch_w = b_rgbs.shape[-2:]
 
         nerf.train()
-        rgb, extra = nerf(patch_h, patch_w, b_extrin, b_intrin, res=b_rgbs)
+        rgb, extra = nerf(patch_h, patch_w, b_extrin, b_intrin, res=b_rgbs, alpha=swd_alpha)
 
         swd_loss = extra.pop("swd").mean()
         # define extra losses here
@@ -194,9 +202,15 @@ def train():
                 writer.add_scalar(f'lr/{name}', newlr, stepi)
 
         if stepi % args.i_print == 0:
-            print(f"[TRAIN] Iter: {stepi} Loss: {loss.item():.4f} SWD: {swd_loss.item():.4f}",
-                  "|".join([f"{k}: {v.item():.4f}" for k, v in extra_losses.items()]))
+            epoch_tqdm.set_description(f"[TRAIN] Iter: {stepi} Loss: {loss.item():.4f} SWD: {swd_loss.item():.4f}",
+                                       "|".join([f"{k}: {v.item():.4f}" for k, v in extra_losses.items()]))
     # end of run one iteration
+
+    # removing extra views and only keep one training view. Very dirty, Please delete afterward.
+    # videos = videos[:1]
+    # poses = poses[:1]
+    # intrins = intrins[:1]
+    # render_extrins = pose2extrin_torch(poses).expand(len(render_intrins), -1, -1)
 
     # ##########################
     # start training
@@ -205,16 +219,17 @@ def train():
     iter_total_step = 0
     # TODO: figure out pyramid level based on the start
     print('Begin')
-    for pyr_i, (train_factor, hw, num_step) in enumerate(zip(pyr_factors, pyr_hw, pyr_num_step)):
+    for pyr_i, (train_factor, hw, num_epoch) in enumerate(zip(pyr_factors, pyr_hw, pyr_num_epoch)):
         nerf.module.lod(train_factor)
         optimizer = nerf.module.get_optimizer(step=0)
         # generate dataset and optimizer
         dataset = MVVidPatchDataset(hw, videos,
                                     (args.patch_h_size, args.patch_w_size),
                                     (args.patch_h_stride, args.patch_w_stride),
-                                    poses, intrins)
+                                    poses, intrins, alphas=swd_alphas)
         dataloader = DataLoader(dataset, 1, shuffle=True)
-        for epoch_i in trange(num_step):
+        epoch_tqdm = trange(num_epoch)
+        for epoch_i in epoch_tqdm:
             for iter_i, datainfo in enumerate(dataloader):
 
                 if hasattr(nerf.module, "update_step"):

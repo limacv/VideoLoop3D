@@ -133,7 +133,7 @@ def load_mv_videos(basedir, factor=1, recenter=True, bd_factor=.75):
     _, poses, intrins, bds, render_poses, render_intrins = load_llff_data(basedir, factor, recenter, bd_factor,
                                                                           load_img=False)
     videos_path = sorted(glob.glob(basedir + f"/videos_{factor}/*"))
-    videos = [imageio.mimread(vp) for vp in videos_path]
+    videos = [imageio.mimread(vp, memtest=False) for vp in videos_path]
     return videos, poses, intrins, bds, render_poses, render_intrins
 
 

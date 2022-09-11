@@ -16,7 +16,7 @@ swd_patch_size = 7
 swd_patcht_size = 7
 
 pyr_minimal_dim = 60
-pyr_num_step = 2000
+pyr_num_epoch = 2000
 pyr_factor = 0.5
 
 # mpi configuration
@@ -62,3 +62,5 @@ i_weight = 10
 i_testset = 1000000000
 i_eval = 1000000000
 i_video = 1
+swd_alpha_ref = -1
+swd_alpha_other = -1

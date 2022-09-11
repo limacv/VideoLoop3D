@@ -26,6 +26,8 @@ def config_parser():
                         help='produce looping videos')
     parser.add_argument("--init_from", type=str, default='',
                         help='noise / <path to tar file> / prefix')
+    parser.add_argument("--init_std", type=float, default=0,
+                        help='noise std of the dynamic MPV')
     parser.add_argument("--swd_loss_type", type=str, default='swd',
                         help='choose among swd, gpnn, mse')
     parser.add_argument("--swd_patch_size", type=int, default=7,
@@ -38,12 +40,18 @@ def config_parser():
                         help='produce looping videos')
     parser.add_argument("--swd_num_proj", type=int, default=128,
                         help='produce looping videos')
+    parser.add_argument("--swd_alpha_ref", type=float, default=0,
+                        help='the alpha that controls the coherence and consistency')
+    parser.add_argument("--swd_alpha_other", type=float, default=0,
+                        help='the alpha that controls the coherence and consistency')
+    parser.add_argument("--swd_alpha_ref_idx", type=int, default=0,
+                        help='swd_alpha = ref if view==swd_alpha_reference_viewidx else other')
     # pyramid configuration
     parser.add_argument("--pyr_stage", type=str, default='',
                         help='x,y,z,...   iteration to upsample')
     parser.add_argument("--pyr_minimal_dim", type=int, default=60,
                         help='if > 0, will determine the pyr_stage')
-    parser.add_argument("--pyr_num_step", type=int, default=600,
+    parser.add_argument("--pyr_num_epoch", type=int, default=600,
                         help='iter num in each level')
     parser.add_argument("--pyr_factor", type=float, default=0.5,
                         help='factor in each pyr level')

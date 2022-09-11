@@ -111,7 +111,7 @@ class Patch3DSWDLoss(torch.nn.Module):
         self.mask_patches_factor = mask_patches_factor
         self.roi_region_pct = roi_region_pct
 
-    def forward(self, x, y, mask=None, same_input=False):
+    def forward(self, x, y, mask=None, same_input=False, alpha=None):
         b, c, f, h, w = x.shape
         x = x * 2 - 1
         y = y * 2 - 1
@@ -169,11 +169,13 @@ class Patch3DGPNNDirectLoss(torch.nn.Module):
         self.last_y2x = None
         self.last_weight = None
 
-    def forward(self, x, y, mask=None, same_input=False):  # x is the src and y is the target
+    def forward(self, x, y, mask=None, same_input=False, alpha=1e10):  # x is the src and y is the target
         if same_input:
             weight = self.last_weight
             y2x = self.last_y2x
         else:
+            alpha = None if alpha > 1000 else alpha
+
             with torch.no_grad():
                 projx = extract_3Dpatches(x, self.patch_size, self.patcht_size, self.stride, self.stridet)  # b, c, d, h, w
                 b, c, d, h, w = projx.shape
@@ -182,7 +184,7 @@ class Patch3DGPNNDirectLoss(torch.nn.Module):
                 projx = projx.permute(0, 3, 4, 2, 1).reshape(B, -1, c)
                 projy = extract_3Dpatches(y, self.patch_size, self.patcht_size, self.stride, self.stridet)  # b, c, d, h, w
                 projy = projy.permute(0, 3, 4, 2, 1).reshape(B, -1, c)
-                nns = get_NN_indices_low_memory(projx, projy, None, 1024)
+                nns = get_NN_indices_low_memory(projx, projy, alpha, 1024)
                 projy2x = projy[torch.arange(B, device=nns.device)[:, None], nns]
                 fold = FoldNd(x.shape[-3:],
                               kernel_size=(self.patch_size, self.patch_size, self.patcht_size),
@@ -208,6 +210,6 @@ class Patch3DMSE(torch.nn.Module):  # dummy loss for ablation
         super().__init__()
         self.name = f"MSE"
 
-    def forward(self, x, y, mask=None, same_input=False):  # x is the src and y is the target
+    def forward(self, x, y, mask=None, same_input=False, alpha=None):  # x is the src and y is the target
         loss = torch.abs(x - y).mean()
         return loss
