@@ -42,6 +42,7 @@ class MVPatchDataset(Dataset):
         self.view_index = view_index.reshape(-1).tolist()
 
         self.images = []
+        self.dynmask = []
         # for debug only
         # self.images = [torch.rand(3, self.h, self.w)] * self.v
         # return
@@ -74,7 +75,9 @@ class MVPatchDataset(Dataset):
                 raise RuntimeError(f"Unrecognized vid2img_mode={self.mode}")
 
             img = torch.tensor(img).permute(2, 0, 1)
+            dyn_mask = torch.tensor(np.std(vid, axis=0).sum(dim=-1))
             self.images.append(img)
+            self.dynmask.append(dyn_mask)
         print(f"Dataset: generate {len(self)} patches for training, pad {pad_info} to videos")
 
     def __len__(self):

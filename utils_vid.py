@@ -4,6 +4,19 @@ from unfoldNd import UnfoldNd, FoldNd
 import numpy as np
 
 
+def robust_lossfun(x, alpha, scale, epsilon=1e-6):
+    squared_scaled_x = (x / scale) ** 2
+    if alpha == 0:
+        return torch.log1p(squared_scaled_x * 0.5)
+    elif alpha == 2:
+        return 0.5 * squared_scaled_x
+    else:
+        b = abs(alpha - 2) + epsilon
+        d = alpha + epsilon if alpha >= 0 else alpha - epsilon
+        loss = (b / d) * (torch.pow(squared_scaled_x / b + 1., 0.5 * d) - 1.)
+        return loss
+
+
 def duplicate_to_match_lengths(arr1, arr2):
     """
     Duplicates entries of the smaller array to match its size to the bigger one
@@ -58,7 +71,7 @@ def efficient_compute_distances(X, Y):
     dist = (X * X).sum(-1)[:, :, None] + (Y * Y).sum(-1)[:, None, :] - 2.0 * (X @ Y.permute(0, 2, 1))
     d = X.shape[-1]
     dist /= d  # normalize by size of vector to make dists independent of the size of d
-               # ( use same alpha for all patche-sizes)
+    # ( use same alpha for all patche-sizes)
     return dist
 
 
@@ -98,8 +111,9 @@ def get_NN_indices_low_memory(X, Y, alpha, chunksz):
 
 
 class Patch3DSWDLoss(torch.nn.Module):
-    def __init__(self, patch_size=7, patcht_size=7, stride=1, stridet=1, num_proj=256, use_convs=True, mask_patches_factor=0,
-                       roi_region_pct=0.02):
+    def __init__(self, patch_size=7, patcht_size=7, stride=1, stridet=1, num_proj=256, use_convs=True,
+                 mask_patches_factor=0,
+                 roi_region_pct=0.02):
         super(Patch3DSWDLoss, self).__init__()
         self.name = f"Conv3DSWDLoss(p-{patch_size}:{stride})"
         self.patch_size = patch_size
@@ -132,9 +146,9 @@ class Patch3DSWDLoss(torch.nn.Module):
             projx = F.conv3d(x, rand,
                              stride=[self.stride, self.stride, self.stridet])
             _, _, cf, ch, cw = projx.shape
-            projx = projx.reshape(self.num_proj, cf, ch*cw)
+            projx = projx.reshape(self.num_proj, cf, ch * cw)
             projy = F.conv3d(y, rand,
-                             stride=[self.stride, self.stride, self.stridet]).reshape(self.num_proj, -1, ch*cw)
+                             stride=[self.stride, self.stride, self.stridet]).reshape(self.num_proj, -1, ch * cw)
             projx = projx.permute(0, 2, 1).reshape(self.num_proj * ch * cw, -1)
             projy = projy.permute(0, 2, 1).reshape(self.num_proj * ch * cw, -1)
         else:
@@ -159,13 +173,15 @@ class Patch3DSWDLoss(torch.nn.Module):
 
 
 class Patch3DGPNNDirectLoss(torch.nn.Module):
-    def __init__(self, patch_size=7, patcht_size=7, stride=1, stridet=1):
+    def __init__(self, patch_size=7, patcht_size=7, stride=1, stridet=1, rou=-2, scaling=0.2):
         super().__init__()
         self.name = f"Patch3DGPNN"
         self.patch_size = patch_size
         self.patcht_size = patcht_size
         self.stride = stride
         self.stridet = stridet
+        self.rou = rou
+        self.scaling = scaling
         self.last_y2x = None
         self.last_weight = None
 
@@ -177,12 +193,14 @@ class Patch3DGPNNDirectLoss(torch.nn.Module):
             alpha = None if alpha > 1000 else alpha
 
             with torch.no_grad():
-                projx = extract_3Dpatches(x, self.patch_size, self.patcht_size, self.stride, self.stridet)  # b, c, d, h, w
+                projx = extract_3Dpatches(x, self.patch_size, self.patcht_size, self.stride,
+                                          self.stridet)  # b, c, d, h, w
                 b, c, d, h, w = projx.shape
                 B = b * h * w
                 D = d * h * w
                 projx = projx.permute(0, 3, 4, 2, 1).reshape(B, -1, c)
-                projy = extract_3Dpatches(y, self.patch_size, self.patcht_size, self.stride, self.stridet)  # b, c, d, h, w
+                projy = extract_3Dpatches(y, self.patch_size, self.patcht_size, self.stride,
+                                          self.stridet)  # b, c, d, h, w
                 projy = projy.permute(0, 3, 4, 2, 1).reshape(B, -1, c)
                 nns = get_NN_indices_low_memory(projx, projy, alpha, 1024)
                 projy2x = projy[torch.arange(B, device=nns.device)[:, None], nns]
@@ -198,10 +216,11 @@ class Patch3DGPNNDirectLoss(torch.nn.Module):
                 y2x = fold(projy2x_unfold.reshape(b, -1, D))
                 weight = y2x[:, 3:].clamp_min(1e-10)
                 y2x = y2x[:, :3] / weight
+                weight = weight / weight.max()
                 self.last_weight = weight
                 self.last_y2x = y2x
 
-        loss = (torch.abs(x - y2x) * weight).mean()
+        loss = (robust_lossfun(x - y2x, self.rou, self.scaling) * weight).mean()
         return loss
 
 

@@ -40,6 +40,10 @@ def config_parser():
                         help='produce looping videos')
     parser.add_argument("--swd_num_proj", type=int, default=128,
                         help='produce looping videos')
+    parser.add_argument("--swd_rou", type=float, default=0,
+                        help='parameter of robustness term')
+    parser.add_argument("--swd_scaling", type=float, default=0.2,
+                        help='parameter of robustness term')
     parser.add_argument("--swd_alpha_ref", type=float, default=0,
                         help='the alpha that controls the coherence and consistency')
     parser.add_argument("--swd_alpha_other", type=float, default=0,

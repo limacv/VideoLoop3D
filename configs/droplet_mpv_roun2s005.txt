@@ -1,6 +1,6 @@
 gpu_num = 1
 # Dataset related
-expname = MPVgpnn_droplet720p_f30_allviewalpha0_rou0
+expname = MPVgpnn_droplet720p_f30_allviewalpha0_roun2s005
 datadir = /apdcephfs/private_leema/data/VideoLoops/data/droplet720p/
 expdir  = /apdcephfs/private_leema/data/VideoLoops/logs
 factor = 2
@@ -60,4 +60,5 @@ swd_stride = 2
 swd_stridet = 2
 swd_alpha_ref = 0
 swd_alpha_other = 0
-swd_rou = 0
+swd_rou = -2
+swd_scaling = 0.05

@@ -152,7 +152,8 @@ class MPMeshVid(nn.Module):
             self.swd_loss = Patch3DGPNNDirectLoss(
                 patch_size=self.swd_patch_size,
                 patcht_size=self.swd_patcht_size,
-                stride=self.swd_stride, stridet=self.swd_stridet
+                stride=self.swd_stride, stridet=self.swd_stridet,
+                rou=args.swd_rou, scaling=args.swd_scaling
             )
         elif args.swd_loss_type == 'mse':
             self.swd_loss = Patch3DMSE()
@@ -382,7 +383,7 @@ class MPMeshVid(nn.Module):
             else:
                 mean_loss = (rgb_pad.mean(dim=0)[None] - res.mean(dim=1)).abs().mean()
                 # std_loss = (rgb_pad.std(dim=0)[None] - res.std(dim=1)).abs().mean()
-                swd_loss = mean_loss + std_loss
+                swd_loss = mean_loss
             extra['swd'] = swd_loss.reshape(1, -1)
 
             if self.args.sparsity_loss_weight > 0:
