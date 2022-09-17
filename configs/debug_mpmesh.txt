@@ -19,7 +19,8 @@ pyr_num_epoch = 2000
 pyr_factor = 0.5
 
 # mpi configuration
-sparsify_epoch = 0
+sparsify_epoch = -1
+direct2sh = 0
 vid2img_mode = blur
 mpi_h_scale = 1.2
 mpi_w_scale = 1.2
@@ -59,7 +60,7 @@ i_print = 10
 i_weight = 10
 i_testset = 1000000000
 i_eval = 1000000000
-i_video = 1
-swd_alpha_ref = 0
-swd_alpha_other = 0
+i_video = 2
+lossname_ref = gpnn_0
+lossname_other = gpnn_0
 swd_rou = -2

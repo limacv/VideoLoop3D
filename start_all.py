@@ -3,8 +3,10 @@ from glob import glob
 
 files = [
     # "droplet_mpv",
-    "droplet_mpv_roun2s01",
-    "droplet_mpv_roun2s005",
+    # "droplet_mpv_roun2s01",
+    # "droplet_mpv_roun2s005",
+    # "droplet_mpv_v07",
+    # "droplet_mpv_v037"
     # "droplet_mpv_alpha00001",
     # "droplet_mpv_alpha0001",
     # "droplet_mpv_alpha001",
@@ -20,6 +22,7 @@ files = [
     # "stair2water_mpv",
     # "stair2water_mpv_oneview",
     # "stair2water_mpv_avgview",
+    "synwater_mpv"
 ]
 
 files = [file + ".txt" for file in files]

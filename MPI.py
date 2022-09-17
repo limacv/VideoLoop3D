@@ -102,12 +102,12 @@ class MPMesh(nn.Module):
             atlas[:, -1] = -2
             self.use_viewdirs = False
         elif args.rgb_mlp_type == "rgb_sh":
-            atlas_cnl = 3 * 9 + 1  # one for alpha, 9 for base
+            atlas_cnl = 3 * 4 + 1  # one for alpha, 9 for base
             atlas = torch.rand((1, atlas_cnl, int(self.atlas_h), int(self.atlas_w)))
             self.feat2rgba = SphericalHarmoic_RGB(atlas_cnl, self.view_cnl)
             self.use_viewdirs = True
         elif args.rgb_mlp_type == "rgba_sh":
-            atlas_cnl = 4 * 9  # 9 for each channel
+            atlas_cnl = 4 * 4  # 9 for each channel
             atlas = torch.rand((1, atlas_cnl, int(self.atlas_h), int(self.atlas_w)))
             self.feat2rgba = SphericalHarmoic_RGBA(atlas_cnl, self.view_cnl)
             self.use_viewdirs = True
@@ -229,8 +229,18 @@ class MPMesh(nn.Module):
         import imageio
         imageio.imwrite(prefix + ".png", texture)
 
-    # @torch.no_grad()
-    # def direct2sh(self):
+    @torch.no_grad()
+    def direct2sh(self):
+        self.view_embed_fn, self.view_cnl = get_embedder(self.args.multires_views, input_dim=3)
+        self.rgb_mlp_type = 'rgb_sh'
+        atlas_cnl = 3 * 4 + 1  # 9 for each channel
+        atlas = torch.zeros((1, atlas_cnl, self.atlas.shape[-2], self.atlas.shape[-1])).type_as(self.atlas)
+        atlas[:, 0] = self.atlas.data[:, -1]
+        atlas[:, 1::4] = self.atlas.data[:, :3]
+        self.register_parameter("atlas", nn.Parameter(atlas, requires_grad=True))
+
+        self.feat2rgba = SphericalHarmoic_RGB(atlas_cnl, self.view_cnl)
+        self.use_viewdirs = True
 
     @torch.no_grad()
     def sparsify_faces(self, alpha_thresh=0.03):
@@ -414,7 +424,9 @@ class MPMesh(nn.Module):
         extra = {}
         if self.training:
             if self.args.sparsity_loss_weight > 0:
-                sparsity = variables["mpi"][..., -1].abs().mean()
+                alpha = variables["mpi"][..., -1]
+                sparsity = alpha.norm(dim=-1, p=1) / alpha.norm(dim=-1, p=2).clamp_min(1e-6)
+                sparsity = sparsity.mean()
                 extra["sparsity"] = sparsity.reshape(1, -1)
 
             if self.args.rgb_smooth_loss_weight > 0:

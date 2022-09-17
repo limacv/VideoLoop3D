@@ -10,7 +10,7 @@ from utils import *
 from NeRF_modules import get_embedder
 from utils_mpi import *
 import trimesh
-from utils_vid import Patch3DSWDLoss, Patch3DGPNNDirectLoss, Patch3DMSE
+from utils_vid import Patch3DSWDLoss, Patch3DGPNNDirectLoss, Patch3DMSE, Patch3DAvg
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer import (
     look_at_view_transform,
@@ -141,22 +141,27 @@ class MPMeshVid(nn.Module):
         self.swd_patcht_size = args.swd_patcht_size
         self.swd_stride = args.swd_stride
         self.swd_stridet = args.swd_stridet
-        if args.swd_loss_type == 'swd':
-            self.swd_loss = Patch3DSWDLoss(
+
+        swd_loss = Patch3DSWDLoss(
                 patch_size=self.swd_patch_size,
                 patcht_size=self.swd_patcht_size, stride=self.swd_stride, stridet=self.swd_stridet,
                 num_proj=args.swd_num_proj, use_convs=True, mask_patches_factor=0,
                 roi_region_pct=1
             )
-        elif args.swd_loss_type == 'gpnn':
-            self.swd_loss = Patch3DGPNNDirectLoss(
+        gpnn_loss = Patch3DGPNNDirectLoss(
                 patch_size=self.swd_patch_size,
                 patcht_size=self.swd_patcht_size,
                 stride=self.swd_stride, stridet=self.swd_stridet,
                 rou=args.swd_rou, scaling=args.swd_scaling
             )
-        elif args.swd_loss_type == 'mse':
-            self.swd_loss = Patch3DMSE()
+        mse_loss = Patch3DMSE()
+        avg_loss = Patch3DAvg()
+        self.losses = {
+            'swd': swd_loss,
+            'gpnn': gpnn_loss,
+            'mse': mse_loss,
+            'avg': avg_loss
+        }
 
     def lod(self, factor):
         h, w = int(self.atlas_h * factor), int(self.atlas_w * factor)
@@ -360,7 +365,7 @@ class MPMeshVid(nn.Module):
         }
         return rgb[..., :3], variables
 
-    def forward(self, h, w, tar_extrins, tar_intrins, ts=None, res=None, alpha=1e10):
+    def forward(self, h, w, tar_extrins, tar_intrins, ts=None, res=None, loss_name='gpnn_1.0'):
         extrins = tar_extrins @ self.ref_extrin[None, ...].inverse()
 
         if ts is None:
@@ -376,15 +381,15 @@ class MPMeshVid(nn.Module):
                 pad_frame = self.swd_patcht_size - 1
                 rgb_pad = torch.cat([rgb, rgb[:pad_frame]], 0)
 
-            alpha = alpha.item()
-            if alpha >= 0:
-                swd_loss = self.swd_loss(rgb_pad.permute(1, 0, 2, 3)[None],
-                                         res.permute(0, 2, 1, 3, 4), alpha=alpha)
-            else:
-                mean_loss = (rgb_pad.mean(dim=0)[None] - res.mean(dim=1)).abs().mean()
-                # std_loss = (rgb_pad.std(dim=0)[None] - res.std(dim=1)).abs().mean()
-                swd_loss = mean_loss
-            extra['swd'] = swd_loss.reshape(1, -1)
+            loss_name = loss_name.split('_')
+            alpha = float(loss_name[1]) if len(loss_name) > 1 else None
+            loss_name = loss_name[0]
+
+            loss = self.losses[loss_name]
+            main_loss = loss(rgb_pad.permute(1, 0, 2, 3)[None],
+                             res.permute(0, 2, 1, 3, 4), alpha=alpha)
+
+            extra['swd'] = main_loss.reshape(1, -1)
 
             if self.args.sparsity_loss_weight > 0:
                 sparsity = variables["mpi"][..., -1].abs().mean()

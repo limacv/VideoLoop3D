@@ -50,7 +50,7 @@ class NeX_RGB(nn.Module):  # alpha is view dependent
 class SphericalHarmoic_RGB(nn.Module):  # alpha is view-independent
     def __init__(self, feat_cnl, view_cn):
         super().__init__()
-        self.sh_dim = 9
+        self.sh_dim = feat_cnl // 3
         self.feat_cnl = feat_cnl
         self.view_cnl = view_cn
 

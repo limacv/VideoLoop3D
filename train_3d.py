@@ -54,6 +54,8 @@ class MVPatchDataset(Dataset):
             elif self.mode == 'average':
                 # aveage
                 img = vid.mean(axis=0)
+            elif self.mode == 'first':
+                img = vid[0]
             elif self.mode.startswith('dynamic'):
                 # emphsize the dynamics
                 weight = np.linalg.norm(vid - vid.mean(axis=0, keepdims=True), axis=-1, keepdims=True)
@@ -68,14 +70,13 @@ class MVPatchDataset(Dataset):
                 vid_blur = np.array([cv2.GaussianBlur(v_, (b, b), 0) for v_ in vid])
                 vid_blur_avg = vid_blur.mean(axis=0, keepdims=True)
                 weight = np.linalg.norm(vid_blur - vid_blur_avg, axis=-1, keepdims=True)
-                weight = np.clip(weight * 3, 0.01, 1)
-                vid_dynblur = vid_blur * weight + vid * (1 - weight)
-                img = (vid_dynblur * weight).sum(axis=0) / weight.sum(axis=0)
+                weight = np.clip(weight * 3, 0.001, 3)
+                img = (vid_blur * weight).sum(axis=0) / weight.sum(axis=0)
             else:
                 raise RuntimeError(f"Unrecognized vid2img_mode={self.mode}")
 
             img = torch.tensor(img).permute(2, 0, 1)
-            dyn_mask = torch.tensor(np.std(vid, axis=0).sum(dim=-1))
+            dyn_mask = torch.tensor(np.std(vid, axis=0).sum(axis=-1))
             self.images.append(img)
             self.dynmask.append(dyn_mask)
         print(f"Dataset: generate {len(self)} patches for training, pad {pad_info} to videos")
@@ -243,6 +244,11 @@ def train():
             nerf.module.sparsify_faces()
             print("Setting sparsity loss weight to 0")
             nerf.module.args.sparsity_loss_weight = 0
+            optimizer = nerf.module.get_optimizer()
+
+        if epoch_i == args.direct2sh_epoch:
+            print("Converting direct to data_sh")
+            nerf.module.direct2sh()
             optimizer = nerf.module.get_optimizer()
 
         for iter_i, datainfo in enumerate(dataloader):

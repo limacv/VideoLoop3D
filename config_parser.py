@@ -44,12 +44,12 @@ def config_parser():
                         help='parameter of robustness term')
     parser.add_argument("--swd_scaling", type=float, default=0.2,
                         help='parameter of robustness term')
-    parser.add_argument("--swd_alpha_ref", type=float, default=0,
-                        help='the alpha that controls the coherence and consistency')
-    parser.add_argument("--swd_alpha_other", type=float, default=0,
-                        help='the alpha that controls the coherence and consistency')
-    parser.add_argument("--swd_alpha_ref_idx", type=int, default=0,
-                        help='swd_alpha = ref if view==swd_alpha_reference_viewidx else other')
+    parser.add_argument("--lossname_ref", type=str, default='gpnn',
+                        help='gpnn, mse, swd, avg. gpnn_x to specify alpha==x')
+    parser.add_argument("--lossname_other", type=str, default='gpnn',
+                        help='gpnn, mse, swd, avg. gpnn_x to specify alpha==x')
+    parser.add_argument("--lossname_refidx", type=str, default='0',
+                        help='a,b,c swd_alpha = ref if view==swd_alpha_reference_viewidx else other')
     # pyramid configuration
     parser.add_argument("--pyr_stage", type=str, default='',
                         help='x,y,z,...   iteration to upsample')
@@ -63,6 +63,8 @@ def config_parser():
     # for mpi
     parser.add_argument("--sparsify_epoch", type=int, default=-1,
                         help='sparsify the MPMesh in epoch')
+    parser.add_argument("--direct2sh_epoch", type=int, default=-1,
+                        help='converting direct to sh')
     parser.add_argument("--vid2img_mode", type=str, default='average',
                         help='choose among average, median, static, dynamic')
     parser.add_argument("--mpi_h_scale", type=float, default=1.4,

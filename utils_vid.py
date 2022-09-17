@@ -115,7 +115,6 @@ class Patch3DSWDLoss(torch.nn.Module):
                  mask_patches_factor=0,
                  roi_region_pct=0.02):
         super(Patch3DSWDLoss, self).__init__()
-        self.name = f"Conv3DSWDLoss(p-{patch_size}:{stride})"
         self.patch_size = patch_size
         self.patcht_size = patcht_size
         self.stride = stride
@@ -173,9 +172,8 @@ class Patch3DSWDLoss(torch.nn.Module):
 
 
 class Patch3DGPNNDirectLoss(torch.nn.Module):
-    def __init__(self, patch_size=7, patcht_size=7, stride=1, stridet=1, rou=-2, scaling=0.2):
+    def __init__(self, patch_size=7, patcht_size=7, stride=1, stridet=1, rou=0, scaling=0.2):
         super().__init__()
-        self.name = f"Patch3DGPNN"
         self.patch_size = patch_size
         self.patcht_size = patcht_size
         self.stride = stride
@@ -224,11 +222,19 @@ class Patch3DGPNNDirectLoss(torch.nn.Module):
         return loss
 
 
-class Patch3DMSE(torch.nn.Module):  # dummy loss for ablation
+class Patch3DMSE(torch.nn.Module):  # per frame MSE
     def __init__(self):
         super().__init__()
-        self.name = f"MSE"
 
     def forward(self, x, y, mask=None, same_input=False, alpha=None):  # x is the src and y is the target
-        loss = torch.abs(x - y).mean()
+        loss = ((x - y) ** 2).mean()
         return loss
+
+
+class Patch3DAvg(torch.nn.Module):  # average MSE
+    def __init__(self):
+        super(Patch3DAvg, self).__init__()
+
+    def forward(self, x, y, mask=None, same_input=False, alpha=None):
+        mean_loss = ((x.mean(dim=2) - y.mean(dim=2)) ** 2).mean()
+        return mean_loss

@@ -21,7 +21,7 @@ from tqdm import tqdm, trange
 
 class MVVidPatchDataset(Dataset):
     def __init__(self, resize_hw, videos, patch_size, patch_stride, poses, intrins,
-                 alphas=None):
+                 loss_names=None):
         super().__init__()
         h_raw, w_raw, _ = videos[0][0].shape[-3:]
         self.h, self.w = resize_hw
@@ -41,9 +41,8 @@ class MVVidPatchDataset(Dataset):
         view_index = np.arange(self.v)[:, None, None].repeat(patch_wh_start.shape[1], axis=1)
         self.patch_wh_start = patch_wh_start.reshape(-1, 2).cpu()
         self.view_index = view_index.reshape(-1).tolist()
-        self.alphas = [1e10] * self.v if alphas is None else alphas
-        assert len(alphas) == self.v
-        self.alphas = torch.tensor(self.alphas).type_as(intrins)
+        self.loss_names = loss_names
+        assert len(self.loss_names) == self.v
 
         self.videos = []
         for video in videos:
@@ -63,7 +62,7 @@ class MVVidPatchDataset(Dataset):
         pose = self.poses[view_idx]
         intrin = get_new_intrin(self.intrins[view_idx], h_start, w_start).float()
         crops = self.videos[view_idx][..., h_start: h_start + self.patch_h_size, w_start: w_start + self.patch_w_size]
-        alpha = self.alphas[view_idx]
+        alpha = self.loss_names[view_idx]
         return w_start, h_start, pose, intrin, crops.cuda(), alpha
 
 
@@ -149,8 +148,10 @@ def train():
     intrins = torch.tensor(intrins)
 
     # figuring out the alpha value
-    swd_alphas = [args.swd_alpha_other] * V
-    swd_alphas[args.swd_alpha_ref_idx] = args.swd_alpha_ref
+    loss_names = [args.lossname_other] * V
+    ref_idx = list(map(int, args.lossname_refidx.split(',')))
+    for ref_idx in ref_idx:
+        loss_names[ref_idx] = args.lossname_ref
 
     ##########################
     # initialize the MPV
@@ -171,12 +172,12 @@ def train():
 
     # begin of run one iteration (one patch)
     def run_iter(stepi, optimizer_, datainfo_):
-        h_starts, w_starts, b_pose, b_intrin, b_rgbs, swd_alpha = datainfo_
+        h_starts, w_starts, b_pose, b_intrin, b_rgbs, lossname = datainfo_
         b_extrin = pose2extrin_torch(b_pose)
         patch_h, patch_w = b_rgbs.shape[-2:]
 
         nerf.train()
-        rgb, extra = nerf(patch_h, patch_w, b_extrin, b_intrin, res=b_rgbs, alpha=swd_alpha)
+        rgb, extra = nerf(patch_h, patch_w, b_extrin, b_intrin, res=b_rgbs, alpha=lossname)
 
         swd_loss = extra.pop("swd").mean()
         # define extra losses here
@@ -226,7 +227,7 @@ def train():
         dataset = MVVidPatchDataset(hw, videos,
                                     (args.patch_h_size, args.patch_w_size),
                                     (args.patch_h_stride, args.patch_w_stride),
-                                    poses, intrins, alphas=swd_alphas)
+                                    poses, intrins, loss_names=loss_names)
         dataloader = DataLoader(dataset, 1, shuffle=True)
         epoch_tqdm = trange(num_epoch)
         for epoch_i in epoch_tqdm:
@@ -245,7 +246,7 @@ def train():
                     param_group['lr'] = new_lrate
 
                 # train for one interation
-                datainfo = [d.cuda() for d in datainfo]
+                datainfo = [d.cuda() if torch.is_tensor(d) else d for d in datainfo]
                 run_iter(iter_total_step, optimizer, datainfo)
 
                 iter_total_step += 1
