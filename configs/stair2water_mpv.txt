@@ -57,5 +57,5 @@ swd_patch_size = 5
 swd_patcht_size = 5
 swd_stride = 2
 swd_stridet = 2
-lossname_ref = gpnn_0
-lossname_other = gpnn_0
+loss_name_ref = gpnn_0
+loss_name = gpnn_0

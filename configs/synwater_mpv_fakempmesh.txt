@@ -1,7 +1,9 @@
 gpu_num = 1
 # Dataset related
-expname = MPV_synwater720p_f30_v0Mse_otherGpnnP5Pt5S2St2Fnmse_base
+expname = MPV_synwater720p_f30_allMse_fakempmesh_largepatch_pry_sgd
+# datadir = /home/mali/data/VideoLoops/data/synwater720p/
 datadir = /apdcephfs/private_leema/data/VideoLoops/data/synwater720p/
+# expdir  = /home/mali/data/VideoLoops/logs/
 expdir  = /apdcephfs/private_leema/data/VideoLoops/logs
 factor = 2
 bd_factor = 0.75
@@ -20,13 +22,12 @@ atlas_grid_h = 4
 atlas_size_scale = 1
 
 # Training related
-patch_h_size = 64
-patch_w_size = 64
-patch_h_stride = 32
-patch_w_stride = 32
-lrate = 0.1
+patch_h_size = 180
+patch_w_size = 320
+patch_h_stride = 90
+patch_w_stride = 160
+lrate = 0.5
 lrate_decay = 100
-lrate_adaptive
 rgb_mlp_type = direct
 rgb_activate = sigmoid
 alpha_activate = sigmoid
@@ -40,13 +41,13 @@ laplacian_loss_weight = 0   # to be adjusted
 i_img = 45
 i_print = 10
 i_weight = 90
-i_video = 45
+i_video = 10
 
 # mpv configuration
 pyr_minimal_dim = 60
-pyr_num_epoch = 90
+pyr_num_epoch = 25
 pyr_factor = 0.75
-init_from = /apdcephfs/private_leema/data/VideoLoops/logs/synwater_avg_smth02/texture003500.png
+# init_from = /apdcephfs/private_leema/data/VideoLoops/logs/synwater_avg_smth02/texture003500.png
 init_std = 0.1
 mpv_frm_num = 30
 # mpv_isloop
@@ -54,7 +55,7 @@ mpv_frm_num = 30
 loss_ref_idx = 0
 swd_loss_gain_ref = 5
 loss_name_ref = mse
-loss_name = gpnn
+loss_name = mse
 swd_alpha = 0
 swd_alpha_ref = 10000
 swd_patch_size = 5

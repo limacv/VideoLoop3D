@@ -142,25 +142,11 @@ class MPMeshVid(nn.Module):
         self.swd_stride = args.swd_stride
         self.swd_stridet = args.swd_stridet
 
-        swd_loss = Patch3DSWDLoss(
-                patch_size=self.swd_patch_size,
-                patcht_size=self.swd_patcht_size, stride=self.swd_stride, stridet=self.swd_stridet,
-                num_proj=args.swd_num_proj, use_convs=True, mask_patches_factor=0,
-                roi_region_pct=1
-            )
-        gpnn_loss = Patch3DGPNNDirectLoss(
-                patch_size=self.swd_patch_size,
-                patcht_size=self.swd_patcht_size,
-                stride=self.swd_stride, stridet=self.swd_stridet,
-                rou=args.swd_rou, scaling=args.swd_scaling
-            )
-        mse_loss = Patch3DMSE()
-        avg_loss = Patch3DAvg()
         self.losses = {
-            'swd': swd_loss,
-            'gpnn': gpnn_loss,
-            'mse': mse_loss,
-            'avg': avg_loss
+            'swd': None,
+            'gpnn': Patch3DGPNNDirectLoss(),
+            'mse': Patch3DMSE,
+            'avg': Patch3DAvg
         }
 
     def lod(self, factor):
@@ -365,12 +351,13 @@ class MPMeshVid(nn.Module):
         }
         return rgb[..., :3], variables
 
-    def forward(self, h, w, tar_extrins, tar_intrins, ts=None, res=None, loss_name='gpnn_1.0'):
+    def forward(self, h, w, tar_extrins, tar_intrins, ts=None, res=None, losscfg=None):
         extrins = tar_extrins @ self.ref_extrin[None, ...].inverse()
 
         if ts is None:
             ts = torch.arange(self.frm_num).long()
         rgb, variables = self.render(h, w, extrins, tar_intrins, ts)
+        frm_num_ori = len(rgb)
         rgb = rgb.permute(0, 3, 1, 2)
         extra = {}
         if self.training:
@@ -381,32 +368,33 @@ class MPMeshVid(nn.Module):
                 pad_frame = self.swd_patcht_size - 1
                 rgb_pad = torch.cat([rgb, rgb[:pad_frame]], 0)
 
-            loss_name = loss_name.split('_')
-            alpha = float(loss_name[1]) if len(loss_name) > 1 else None
-            loss_name = loss_name[0]
-
+            losscfg = {k: v[0].item() if torch.is_tensor(v) else v[0] for k, v in losscfg.items()}
+            loss_name = losscfg.pop('loss_name')
+            loss_gain = losscfg.pop('loss_gain', 1.)
             loss = self.losses[loss_name]
             main_loss = loss(rgb_pad.permute(1, 0, 2, 3)[None],
-                             res.permute(0, 2, 1, 3, 4), alpha=alpha)
+                             res.permute(0, 2, 1, 3, 4), **losscfg)
 
-            extra['swd'] = main_loss.reshape(1, -1)
+            extra['swd'] = main_loss.reshape(1, -1) * (loss_gain * frm_num_ori)
 
             if self.args.sparsity_loss_weight > 0:
-                sparsity = variables["mpi"][..., -1].abs().mean()
+                alpha = variables["mpi"][..., -1]
+                sparsity = alpha.norm(dim=-1, p=1) / alpha.norm(dim=-1, p=2).clamp_min(1e-6)
+                sparsity = sparsity.mean() * frm_num_ori
                 extra["sparsity"] = sparsity.reshape(1, -1)
 
             if self.args.rgb_smooth_loss_weight > 0:
                 smooth = variables["mpi"][..., :-1]
                 smoothx = (smooth[:, :, :-1] - smooth[:, :, 1:]).abs().mean()
                 smoothy = (smooth[:, :-1] - smooth[:, 1:]).abs().mean()
-                smooth = (smoothx + smoothy).reshape(1, -1)
+                smooth = (smoothx + smoothy).reshape(1, -1) * frm_num_ori
                 extra["rgb_smooth"] = smooth.reshape(1, -1)
 
             if self.args.a_smooth_loss_weight > 0:
                 smooth = variables["mpi"][..., -1]
                 smoothx = (smooth[:, :, :-1] - smooth[:, :, 1:]).abs().mean()
                 smoothy = (smooth[:, :-1] - smooth[:, 1:]).abs().mean()
-                smooth = (smoothx + smoothy)
+                smooth = (smoothx + smoothy) * frm_num_ori
                 extra["a_smooth"] = smooth.reshape(1, -1)
 
             # if self.args.d_smooth_loss_weight > 0:

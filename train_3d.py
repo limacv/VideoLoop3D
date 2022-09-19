@@ -266,33 +266,41 @@ def train():
 
             iter_total_step += 1
 
-            ################################
-            if iter_total_step % args.i_weights == 0:
-                if hasattr(nerf.module, "save_mesh"):
-                    prefix = os.path.join(args.expdir, args.expname, f"mesh{iter_total_step:06d}")
-                    nerf.module.save_mesh(prefix)
+        ################################
+        if (epoch_i + 1) % args.i_weights == 0:
+            save_path = os.path.join(args.expdir, args.expname, f'epoch_{epoch_i:04d}.tar')
+            save_dict = {
+                'epoch_i': epoch_i,
+                'network_state_dict': nerf.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+            }
+            torch.save(save_dict, save_path)
 
-                if hasattr(nerf.module, "save_texture"):
-                    prefix = os.path.join(args.expdir, args.expname, f"texture{iter_total_step:06d}")
-                    nerf.module.save_texture(prefix)
+        if (epoch_i + 1) % args.i_video == 0:
+            moviebase = os.path.join(args.expdir, args.expname, f'epoch_{epoch_i:04d}_')
+            if hasattr(nerf.module, "save_mesh"):
+                prefix = os.path.join(args.expdir, args.expname, f"mesh_epoch_{epoch_i:04d}")
+                nerf.module.save_mesh(prefix)
 
-            if iter_total_step % args.i_video == 0:
-                moviebase = os.path.join(args.expdir, args.expname, f'{iter_total_step:06d}_')
-                print('render poses shape', render_extrins.shape, render_intrins.shape)
-                with torch.no_grad():
-                    nerf.eval()
+            if hasattr(nerf.module, "save_texture"):
+                prefix = os.path.join(args.expdir, args.expname, f"texture_epoch_{epoch_i:04d}")
+                nerf.module.save_texture(prefix)
 
-                    rgbs = []
-                    for ri in range(len(render_extrins)):
-                        r_pose = render_extrins[ri:ri + 1]
-                        r_intrin = render_intrins[ri:ri + 1]
+            print('render poses shape', render_extrins.shape, render_intrins.shape)
+            with torch.no_grad():
+                nerf.eval()
 
-                        rgb, extra = nerf(H, W, r_pose, r_intrin)
-                        rgb = rgb[0].permute(1, 2, 0).cpu().numpy()
-                        rgbs.append(rgb)
+                rgbs = []
+                for ri in range(len(render_extrins)):
+                    r_pose = render_extrins[ri:ri + 1]
+                    r_intrin = render_intrins[ri:ri + 1]
 
-                    rgbs = np.array(rgbs)
-                    imageio.mimwrite(moviebase + '_rgb.mp4', to8b(rgbs), fps=30, quality=8)
+                    rgb, extra = nerf(H, W, r_pose, r_intrin)
+                    rgb = rgb[0].permute(1, 2, 0).cpu().numpy()
+                    rgbs.append(rgb)
+
+                rgbs = np.array(rgbs)
+                imageio.mimwrite(moviebase + '_rgb.mp4', to8b(rgbs), fps=30, quality=8)
 
 
 if __name__ == '__main__':

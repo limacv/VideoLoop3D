@@ -1,10 +1,12 @@
 gpu_num = 1
 # Dataset related
 expname = synwater_fst_smth02
-datadir = /apdcephfs/private_leema/data/VideoLoops/data/synwater720p/
-expdir  = /apdcephfs/private_leema/data/VideoLoops/logs
+datadir = /home/mali/data/VideoLoops/data/synwater720p/
+# /apdcephfs/private_leema/data/VideoLoops/data/synwater720p/
+expdir  = /home/mali/data/VideoLoops/logs/
+# /apdcephfs/private_leema/data/VideoLoops/logs
 factor = 2
-bd_factor = 0.9
+bd_factor = 0.75
 seed = 2
 model_type = MPMesh
 
@@ -25,6 +27,8 @@ direct2sh = 40
 N_iters = 50
 patch_h_size = 180
 patch_w_size = 320
+patch_h_stride = 90
+patch_w_stride = 160
 lrate = 0.05
 lrate_decay = 100
 rgb_mlp_type = direct
@@ -39,7 +43,5 @@ laplacian_loss_weight = 0   # to be adjusted
 
 i_img = 50
 i_print = 10
-i_weight = 500
-i_testset = 1000000000
-i_eval = 1000000000
-i_video = 500
+i_weight = 5000000000
+i_video = 10

@@ -4,7 +4,7 @@ import imageio
 import cv2
 import torch.nn.functional as torchf
 import numpy as np
-from NGP_modules import HashEmbedder
+# from NGP_modules import HashEmbedder
 
 
 # Positional encoding (section 5.1)
@@ -188,11 +188,11 @@ def get_embedder(multires, embed_type='pe', input_dim=3,
         else:
             return DictEmbedderWindowed(latent_size, dict_len, window_end), latent_size
 
-    elif embed_type == "hash":
-        embed = HashEmbedder(n_indim=input_dim,
-                             log2_hashmap_size=log2_hash_size,
-                             finest_resolution=2 ** multires)
-        return embed, embed.out_dim
+    # elif embed_type == "hash":
+    #     embed = HashEmbedder(n_indim=input_dim,
+    #                          log2_hashmap_size=log2_hash_size,
+    #                          finest_resolution=2 ** multires)
+    #     return embed, embed.out_dim
 
     else:
         raise RuntimeError(f"Unrecognized embedder type {embed_type}")

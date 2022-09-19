@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from unfoldNd import UnfoldNd, FoldNd
 import numpy as np
+from pytorch_msssim import ssim
 
 
 def robust_lossfun(x, alpha, scale, epsilon=1e-6):
@@ -54,8 +55,8 @@ def extract_3Dpatches(x, patch_size, tpatch_size, stride, tstride):
     d_out = (d - (tpatch_size - 1) - 1) // tstride + 1
     h_out = (h - (patch_size - 1) - 1) // stride + 1
     w_out = (w - (patch_size - 1) - 1) // stride + 1
-    unfold = UnfoldNd(kernel_size=(patch_size, patch_size, tpatch_size),
-                      stride=(stride, stride, tstride))
+    unfold = UnfoldNd(kernel_size=(tpatch_size, patch_size, patch_size),
+                      stride=(tstride, stride, stride))
     x_patches = unfold(x).reshape(b, -1, d_out, h_out, w_out)
     return x_patches
 
@@ -68,6 +69,8 @@ def efficient_compute_distances(X, Y):
     :param Y:  (b, n2, d) tensor
     Returns a n2 n1 of indices
     """
+    X = X.reshape(*X.shape[:2], -1)
+    Y = Y.reshape(*Y.shape[:2], -1)
     dist = (X * X).sum(-1)[:, :, None] + (Y * Y).sum(-1)[:, None, :] - 2.0 * (X @ Y.permute(0, 2, 1))
     d = X.shape[-1]
     dist /= d  # normalize by size of vector to make dists independent of the size of d
@@ -75,7 +78,27 @@ def efficient_compute_distances(X, Y):
     return dist
 
 
-def get_col_mins_efficient(X, Y, chunksz):
+def compute_distances_ssim(X, Y):
+    """
+    :param X:  (b, n1, 3, f, h, w) tensor
+    :param Y:  (b, n2, 3, f, h, w) tensor
+    """
+    b, n1, c, f, h, w = X.shape
+    n2 = Y.shape[1]
+    shape = (b, n1, n2, c, f, h, w)
+    X = X[:, :, None].expand(*shape).reshape(-1, c, f, h, w)
+    Y = Y[:, None, :].expand(*shape).reshape(-1, c, f, h, w)
+    dist = ssim(X, Y, data_range=1, size_average=False, win_size=3, win_sigma=1)
+    return dist.reshape(b, n1, n2)
+
+
+DIST_FNS = {
+    'mse': efficient_compute_distances,
+    'ssim': compute_distances_ssim
+}
+
+
+def get_col_mins_efficient(X, Y, chunksz, dist_fn):
     """
     Computes the l2 distance to the closest x or each y.
     :param X:  (B, n1, d) tensor
@@ -84,27 +107,28 @@ def get_col_mins_efficient(X, Y, chunksz):
     """
     mins = torch.zeros(Y.shape[:2], dtype=X.dtype, device=X.device)
     for starti in range(0, len(Y), chunksz):
-        mins[:, starti: starti + chunksz] = efficient_compute_distances(X, Y[:, starti: starti + chunksz]).min(1)[0]
+        mins[:, starti: starti + chunksz] = dist_fn(X, Y[:, starti: starti + chunksz]).min(1)[0]
     return mins
 
 
-def get_NN_indices_low_memory(X, Y, alpha, chunksz):
+def get_NN_indices_low_memory(X, Y, alpha, chunksz, dist_fn='mse'):
     """
     Get the nearest neighbor index from Y for each X.
     Avoids holding a (n1 * n2) amtrix in order to reducing memory footprint to (b * max(n1,n2)).
-    :param X:  (B, n1, d) tensor
-    :param Y:  (B, n2, d) tensor
+    :param X:  (B, n1, ...) tensor
+    :param Y:  (B, n2, ...) tensor
     Returns (B, n1), long tensor of indice to Y
     """
+    NNs = torch.zeros(X.shape[:2], dtype=torch.long, device=X.device)
+    distance_fn = DIST_FNS[dist_fn]
     if alpha is not None:
-        normalizing_row = get_col_mins_efficient(X, Y, chunksz=chunksz)
+        normalizing_row = get_col_mins_efficient(X, Y, chunksz, distance_fn)
         normalizing_row = alpha + normalizing_row[:, None]
     else:
         normalizing_row = 1
 
-    NNs = torch.zeros(X.shape[:2], dtype=torch.long, device=X.device)
     for starti in range(0, X.shape[1], chunksz):
-        dists = efficient_compute_distances(X[:, starti: starti + chunksz], Y)
+        dists = distance_fn(X[:, starti: starti + chunksz], Y)
         dists = dists / normalizing_row
         NNs[:, starti: starti + chunksz] = torch.argmin(dists, dim=2)
     return NNs
@@ -170,44 +194,38 @@ class Patch3DSWDLoss(torch.nn.Module):
 
         return loss
 
+# def FindNNpatchAndMerge(x, y)
 
-class Patch3DGPNNDirectLoss(torch.nn.Module):
-    def __init__(self, patch_size=7, patcht_size=7, stride=1, stridet=1, rou=0, scaling=0.2):
-        super().__init__()
-        self.patch_size = patch_size
-        self.patcht_size = patcht_size
-        self.stride = stride
-        self.stridet = stridet
-        self.rou = rou
-        self.scaling = scaling
+
+class Patch3DGPNNDirectLoss:
+    def __init__(self):
         self.last_y2x = None
         self.last_weight = None
 
-    def forward(self, x, y, mask=None, same_input=False, alpha=1e10):  # x is the src and y is the target
+    def __call__(self, x, y, patch_size=7, patcht_size=7, stride=1, stridet=1,  alpha=1e10, rou=0, scaling=0.2,
+                 mask=None, same_input=False, dist_fn='mse'):  # x is the src and y is the target
         if same_input:
             weight = self.last_weight
             y2x = self.last_y2x
         else:
-            alpha = None if alpha > 1000 else alpha
+            alpha = None if alpha > 100 else alpha
 
             with torch.no_grad():
-                projx = extract_3Dpatches(x, self.patch_size, self.patcht_size, self.stride,
-                                          self.stridet)  # b, c, d, h, w
+                projx = extract_3Dpatches(x, patch_size, patcht_size, stride, stridet)  # b, c, d, h, w
                 b, c, d, h, w = projx.shape
                 B = b * h * w
                 D = d * h * w
-                projx = projx.permute(0, 3, 4, 2, 1).reshape(B, -1, c)
-                projy = extract_3Dpatches(y, self.patch_size, self.patcht_size, self.stride,
-                                          self.stridet)  # b, c, d, h, w
-                projy = projy.permute(0, 3, 4, 2, 1).reshape(B, -1, c)
-                nns = get_NN_indices_low_memory(projx, projy, alpha, 1024)
+                projx = projx.permute(0, 3, 4, 2, 1).reshape(B, -1, 3, patcht_size, patch_size, patch_size)
+                projy = extract_3Dpatches(y, patch_size, patcht_size, stride, stridet)  # b, c, d, h, w
+                projy = projy.permute(0, 3, 4, 2, 1).reshape(B, -1, 3, patcht_size, patch_size, patch_size)
+                nns = get_NN_indices_low_memory(projx, projy, alpha, 1024, dist_fn)
                 projy2x = projy[torch.arange(B, device=nns.device)[:, None], nns]
                 fold = FoldNd(x.shape[-3:],
-                              kernel_size=(self.patch_size, self.patch_size, self.patcht_size),
-                              stride=(self.stride, self.stride, self.stridet))
+                              kernel_size=(patch_size, patch_size, patcht_size),
+                              stride=(stride, stride, stridet))
                 projy2x_unfold = projy2x.reshape(b, h, w, d, c).permute(0, 4, 3, 1, 2)
                 projy2x_unfold = projy2x_unfold.reshape(b,
-                                                        3, self.patcht_size, self.patch_size, self.patch_size,
+                                                        3, patcht_size, patch_size, patch_size,
                                                         D)
                 weight = torch.ones_like(projy2x_unfold[:, :1])
                 projy2x_unfold = torch.cat([projy2x_unfold, weight], dim=1)
@@ -218,23 +236,16 @@ class Patch3DGPNNDirectLoss(torch.nn.Module):
                 self.last_weight = weight
                 self.last_y2x = y2x
 
-        loss = (robust_lossfun(x - y2x, self.rou, self.scaling) * weight).mean()
+        loss = (robust_lossfun(x - y2x, rou, scaling) * weight).mean()
         return loss
 
 
-class Patch3DMSE(torch.nn.Module):  # per frame MSE
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x, y, mask=None, same_input=False, alpha=None):  # x is the src and y is the target
-        loss = ((x - y) ** 2).mean()
-        return loss
+def Patch3DMSE(x, y, **kwargs):  # x is the src and y is the target
+    frm = min(x.shape[2], y.shape[2])
+    loss = ((x[:, :, :frm] - y[:, :, :frm]) ** 2).mean()
+    return loss
 
 
-class Patch3DAvg(torch.nn.Module):  # average MSE
-    def __init__(self):
-        super(Patch3DAvg, self).__init__()
-
-    def forward(self, x, y, mask=None, same_input=False, alpha=None):
-        mean_loss = ((x.mean(dim=2) - y.mean(dim=2)) ** 2).mean()
-        return mean_loss
+def Patch3DAvg(x, y, **kwargs):
+    mean_loss = ((x.mean(dim=2) - y.mean(dim=2)) ** 2).mean()
+    return mean_loss

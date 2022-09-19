@@ -1,6 +1,6 @@
 gpu_num = 1
 # Dataset related
-expname = MPV_synwater720p_f30_v0Mse_otherGpnnP5Pt5S2St2Fnmse_base
+expname = MPV_synwater720p_f30_v0Mse_otherGpnnP5Pt1S2St1Fnssim
 datadir = /apdcephfs/private_leema/data/VideoLoops/data/synwater720p/
 expdir  = /apdcephfs/private_leema/data/VideoLoops/logs
 factor = 2
@@ -59,13 +59,13 @@ swd_alpha = 0
 swd_alpha_ref = 10000
 swd_patch_size = 5
 swd_patch_size_ref = 5
-swd_patcht_size = 5
+swd_patcht_size = 1
 swd_patcht_size_ref = 5
 swd_stride = 2
 swd_stride_ref = 2
-swd_stridet = 2
+swd_stridet = 1
 swd_stridet_ref = 2
-swd_dist_fn = mse
+swd_dist_fn = ssim
 swd_dist_fn_ref = mse
 swd_rou = 0
 swd_rou_ref = 0

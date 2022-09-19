@@ -17,11 +17,12 @@ from metrics import compute_img_metric
 import cv2
 from config_parser import config_parser
 from tqdm import tqdm, trange
+from copy import deepcopy
 
 
 class MVVidPatchDataset(Dataset):
     def __init__(self, resize_hw, videos, patch_size, patch_stride, poses, intrins,
-                 loss_names=None):
+                 loss_configs=None):
         super().__init__()
         h_raw, w_raw, _ = videos[0][0].shape[-3:]
         self.h, self.w = resize_hw
@@ -41,8 +42,8 @@ class MVVidPatchDataset(Dataset):
         view_index = np.arange(self.v)[:, None, None].repeat(patch_wh_start.shape[1], axis=1)
         self.patch_wh_start = patch_wh_start.reshape(-1, 2).cpu()
         self.view_index = view_index.reshape(-1).tolist()
-        self.loss_names = loss_names
-        assert len(self.loss_names) == self.v
+        self.loss_configs = loss_configs
+        assert len(self.loss_configs) == self.v
 
         self.videos = []
         for video in videos:
@@ -62,8 +63,8 @@ class MVVidPatchDataset(Dataset):
         pose = self.poses[view_idx]
         intrin = get_new_intrin(self.intrins[view_idx], h_start, w_start).float()
         crops = self.videos[view_idx][..., h_start: h_start + self.patch_h_size, w_start: w_start + self.patch_w_size]
-        alpha = self.loss_names[view_idx]
-        return w_start, h_start, pose, intrin, crops.cuda(), alpha
+        cfg = deepcopy(self.loss_configs[view_idx])
+        return w_start, h_start, pose, intrin, crops.cuda(), cfg
 
 
 def train():
@@ -147,37 +148,62 @@ def train():
     poses = torch.tensor(poses)
     intrins = torch.tensor(intrins)
 
-    # figuring out the alpha value
-    loss_names = [args.lossname_other] * V
-    ref_idx = list(map(int, args.lossname_refidx.split(',')))
+    # figuring out the loss config
+    loss_config_other = {
+        "loss_name": args.loss_name,
+        "patch_size": args.swd_patch_size,
+        "patcht_size": args.swd_patcht_size,
+        "stride": args.swd_stride,
+        "stridet": args.swd_stridet,
+        "alpha": args.swd_alpha,
+        "rou": args.swd_rou,
+        "scaling": args.swd_scaling,
+        "dist_fn": args.swd_dist_fn,
+    }
+    loss_config_ref = {
+        "loss_name": args.loss_name_ref,
+        "loss_gain": args.swd_loss_gain_ref,
+        "patch_size": args.swd_patch_size_ref,
+        "patcht_size": args.swd_patcht_size_ref,
+        "stride": args.swd_stride_ref,
+        "stridet": args.swd_stridet_ref,
+        "alpha": args.swd_alpha_ref,
+        "rou": args.swd_rou_ref,
+        "scaling": args.swd_scaling_ref,
+        "dist_fn": args.swd_dist_fn_ref,
+    }
+    loss_cfgs = [loss_config_other] * V
+    ref_idx = list(map(int, args.loss_ref_idx.split(',')))
     for ref_idx in ref_idx:
-        loss_names[ref_idx] = args.lossname_ref
+        loss_cfgs[ref_idx] = loss_config_ref
+
+    epoch_total_step = 0
+    iter_total_step = 0
 
     ##########################
-    # initialize the MPV
-    # ckpts = [os.path.join(args.expdir, args.expname, f)
-    #          for f in sorted(os.listdir(os.path.join(args.expdir, args.expname))) if 'tar' in f]
-    # print('Found ckpts', ckpts)
-    #
-    # start = 0
-    # if len(ckpts) > 0 and not args.no_reload:
-    #     ckpt_path = ckpts[-1]
-    #     print('Reloading from', ckpt_path)
-    #     ckpt = torch.load(ckpt_path)
-    #
-    #     start = ckpt['global_step']
-    #     optimizer = nerf.module.get_optimizer(start)
-    #     optimizer.load_state_dict(ckpt['optimizer_state_dict'])
-    #     smart_load_state_dict(nerf, ckpt)
+    # load from checkpoint
+    ckpts = [os.path.join(args.expdir, args.expname, f)
+             for f in sorted(os.listdir(os.path.join(args.expdir, args.expname))) if 'tar' in f]
+    print('Found ckpts', ckpts)
+
+    if len(ckpts) > 0 and not args.no_reload:
+        ckpt_path = ckpts[-1]
+        print('Reloading from', ckpt_path)
+        ckpt = torch.load(ckpt_path)
+
+        start = ckpt['global_step']
+        optimizer = nerf.module.get_optimizer(start)
+        optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+        smart_load_state_dict(nerf, ckpt)
 
     # begin of run one iteration (one patch)
     def run_iter(stepi, optimizer_, datainfo_):
-        h_starts, w_starts, b_pose, b_intrin, b_rgbs, lossname = datainfo_
+        h_starts, w_starts, b_pose, b_intrin, b_rgbs, loss_cfg = datainfo_
         b_extrin = pose2extrin_torch(b_pose)
         patch_h, patch_w = b_rgbs.shape[-2:]
 
         nerf.train()
-        rgb, extra = nerf(patch_h, patch_w, b_extrin, b_intrin, res=b_rgbs, alpha=lossname)
+        rgb, extra = nerf(patch_h, patch_w, b_extrin, b_intrin, res=b_rgbs, losscfg=loss_cfg)
 
         swd_loss = extra.pop("swd").mean()
         # define extra losses here
@@ -195,30 +221,21 @@ def train():
         loss.backward()
         optimizer_.step()
 
-        if stepi % args.i_img == 0:
+        if (stepi + 1) % args.i_img == 0:
             writer.add_scalar('aloss/swd', swd_loss.item(), stepi)
             for k, v in extra.items():
                 writer.add_scalar(f'{k}', float(v.mean()), stepi)
             for name, newlr in name_lrates:
                 writer.add_scalar(f'lr/{name}', newlr, stepi)
 
-        if stepi % args.i_print == 0:
+        if (stepi + 1) % args.i_print == 0:
             epoch_tqdm.set_description(f"[TRAIN] Iter: {stepi} Loss: {loss.item():.4f} SWD: {swd_loss.item():.4f}",
                                        "|".join([f"{k}: {v.item():.4f}" for k, v in extra_losses.items()]))
     # end of run one iteration
 
-    # removing extra views and only keep one training view. Very dirty, Please delete afterward.
-    # videos = videos[:1]
-    # poses = poses[:1]
-    # intrins = intrins[:1]
-    # render_extrins = pose2extrin_torch(poses).expand(len(render_intrins), -1, -1)
-
     # ##########################
     # start training
     # ##########################
-    epoch_total_step = 0
-    iter_total_step = 0
-    # TODO: figure out pyramid level based on the start
     print('Begin')
     for pyr_i, (train_factor, hw, num_epoch) in enumerate(zip(pyr_factors, pyr_hw, pyr_num_epoch)):
         nerf.module.lod(train_factor)
@@ -227,7 +244,7 @@ def train():
         dataset = MVVidPatchDataset(hw, videos,
                                     (args.patch_h_size, args.patch_w_size),
                                     (args.patch_h_stride, args.patch_w_stride),
-                                    poses, intrins, loss_names=loss_names)
+                                    poses, intrins, loss_configs=loss_cfgs)
         dataloader = DataLoader(dataset, 1, shuffle=True)
         epoch_tqdm = trange(num_epoch)
         for epoch_i in epoch_tqdm:
@@ -252,17 +269,29 @@ def train():
                 iter_total_step += 1
 
             # saving after epoch
-            if epoch_total_step % args.i_weights == 0:
+            if (epoch_total_step + 1) % args.i_weights == 0:
+                save_path = os.path.join(args.expdir, args.expname, f'l{pyr_i}_epoch_{epoch_i:04d}.tar')
+                save_dict = {
+                    'epoch_i': epoch_i,
+                    'epoch_total_step': epoch_total_step,
+                    'iter_total_step': iter_total_step,
+                    'pyr_i': pyr_i,
+                    'train_factor': train_factor,
+                    'hw': hw,
+                    'network_state_dict': nerf.state_dict(),
+                }
+                torch.save(save_dict, save_path)
+
+            if (epoch_total_step + 1) % args.i_video == 0:
+                moviebase = os.path.join(args.expdir, args.expname, f'l{pyr_i}_{epoch_i:04d}_')
                 if hasattr(nerf.module, "save_mesh"):
-                    prefix = os.path.join(args.expdir, args.expname, f"mesh_l{pyr_i}_{epoch_i:06d}")
+                    prefix = os.path.join(args.expdir, args.expname, f"mesh_l{pyr_i}_{epoch_i:04d}")
                     nerf.module.save_mesh(prefix)
 
                 if hasattr(nerf.module, "save_texture"):
-                    prefix = os.path.join(args.expdir, args.expname, f"texture_l{pyr_i}_{epoch_i:06d}")
+                    prefix = os.path.join(args.expdir, args.expname, f"texture_l{pyr_i}_{epoch_i:04d}")
                     nerf.module.save_texture(prefix)
 
-            if epoch_total_step % args.i_video == 0:
-                moviebase = os.path.join(args.expdir, args.expname, f'l{pyr_i}_{epoch_i:06d}_')
                 print('render poses shape', render_extrins.shape, render_intrins.shape)
                 with torch.no_grad():
                     nerf.eval()

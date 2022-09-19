@@ -1,7 +1,7 @@
 gpu_num = 1
 # Dataset related
-expname = MPVgpnn_droplet720p_f30_view0alpha0rou0s02
-datadir = /apdcephfs/private_leema/data/VideoLoops/data/droplet720p/
+expname = MPV_synwater720p_f30_v0Mse_otherGpnnP5Pt5S2St2Fnssim
+datadir = /apdcephfs/private_leema/data/VideoLoops/data/synwater720p/
 expdir  = /apdcephfs/private_leema/data/VideoLoops/logs
 factor = 2
 bd_factor = 0.75
@@ -10,17 +10,16 @@ model_type = MPMesh
 
 # mpi configuration
 
-mpi_h_scale = 1.2
-mpi_w_scale = 1.2
-mpi_h_verts = 23
-mpi_w_verts = 40
+mpi_h_scale = 1.1
+mpi_w_scale = 1.1
+mpi_h_verts = 27
+mpi_w_verts = 48
 mpi_d = 16
 atlas_cnl = 4
 atlas_grid_h = 4
 atlas_size_scale = 1
 
 # Training related
-
 patch_h_size = 64
 patch_w_size = 64
 patch_h_stride = 32
@@ -32,34 +31,43 @@ rgb_mlp_type = direct
 rgb_activate = sigmoid
 alpha_activate = sigmoid
 
-sparsity_loss_weight = 0
+sparsity_loss_weight = 0.001
 rgb_smooth_loss_weight = 0.2
 a_smooth_loss_weight = 0.2
 #d_smooth_loss_weight = 0.1
 laplacian_loss_weight = 0   # to be adjusted
 
-i_img = 50
+i_img = 45
 i_print = 10
-i_weight = 500
-i_testset = 1000000000
-i_eval = 1000000000
-i_video = 50
+i_weight = 90
+i_video = 45
 
 # mpv configuration
 pyr_minimal_dim = 60
-pyr_num_epoch = 151
+pyr_num_epoch = 90
 pyr_factor = 0.75
-init_from = /apdcephfs/private_leema/data/VideoLoops/logs/droplet720p_dyn_smth02/texture003500.png
+init_from = /apdcephfs/private_leema/data/VideoLoops/logs/synwater_avg_smth02/texture003500.png
 init_std = 0.1
 mpv_frm_num = 30
-mpv_isloop
-swd_loss_type = gpnn
-swd_patch_size = 5
-swd_patcht_size = 5
-swd_stride = 2
-swd_stridet = 2
+# mpv_isloop
+
 loss_ref_idx = 0
-loss_name_ref = gpnn_0
-loss_name = avg
+swd_loss_gain_ref = 5
+loss_name_ref = mse
+loss_name = gpnn
+swd_alpha = 0
+swd_alpha_ref = 10000
+swd_patch_size = 5
+swd_patch_size_ref = 5
+swd_patcht_size = 5
+swd_patcht_size_ref = 5
+swd_stride = 2
+swd_stride_ref = 2
+swd_stridet = 2
+swd_stridet_ref = 2
+swd_dist_fn = ssim
+swd_dist_fn_ref = mse
 swd_rou = 0
-swd_scaling = 0.2
+swd_rou_ref = 0
+swd_scaling = 0.3
+swd_scaling_ref = 0.3

@@ -7,13 +7,6 @@ factor = 2
 seed = 2
 model_type = MPMesh
 
-# mpv configuration
-mpv_frm_num = 5
-mpv_isloop
-swd_loss_type = gpnn
-swd_patch_size = 7
-swd_patcht_size = 7
-
 pyr_minimal_dim = 60
 pyr_num_epoch = 2000
 pyr_factor = 0.5
@@ -61,6 +54,26 @@ i_weight = 10
 i_testset = 1000000000
 i_eval = 1000000000
 i_video = 2
-lossname_ref = gpnn_0
-lossname_other = gpnn_0
-swd_rou = -2
+
+# mpv configuration
+mpv_frm_num = 5
+mpv_isloop
+loss_ref_idx = 0
+loss_name = gpnn
+loss_name_ref = mse
+swd_patch_size = 5
+swd_patch_size_ref = 5
+swd_stride = 2
+swd_stride_ref = 2
+swd_patcht_size = 3
+swd_patcht_size_ref = 3
+swd_stridet = 1
+swd_stridet_ref = 1
+swd_rou = 0
+swd_rou_ref = 0
+swd_scaling = 0.3
+swd_scaling_ref = 0.3
+swd_alpha = 0
+swd_alpha_ref = 0
+swd_dist_fn = ssim
+swd_dist_fn_ref = ssim

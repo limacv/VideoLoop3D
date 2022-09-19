@@ -28,28 +28,49 @@ def config_parser():
                         help='noise / <path to tar file> / prefix')
     parser.add_argument("--init_std", type=float, default=0,
                         help='noise std of the dynamic MPV')
-    parser.add_argument("--swd_loss_type", type=str, default='swd',
-                        help='choose among swd, gpnn, mse')
-    parser.add_argument("--swd_patch_size", type=int, default=7,
+
+    # loss config
+    parser.add_argument("--loss_ref_idx", type=str, default='0',
+                        help='a,b,c swd_alpha = ref if view==swd_alpha_reference_viewidx else other')
+    parser.add_argument("--loss_name", type=str, default='gpnn',
+                        help='gpnn, mse, swd, avg. gpnn_x to specify alpha==x')
+    parser.add_argument("--loss_name_ref", type=str, default='gpnn',
+                        help='gpnn, mse, swd, avg. gpnn_x to specify alpha==x')
+    parser.add_argument("--swd_patch_size", type=int, default=5,
                         help='produce looping videos')
-    parser.add_argument("--swd_patcht_size", type=int, default=7,
+    parser.add_argument("--swd_patch_size_ref", type=int, default=5,
                         help='produce looping videos')
-    parser.add_argument("--swd_stride", type=int, default=1,
+    parser.add_argument("--swd_patcht_size", type=int, default=5,
                         help='produce looping videos')
-    parser.add_argument("--swd_stridet", type=int, default=1,
+    parser.add_argument("--swd_patcht_size_ref", type=int, default=5,
                         help='produce looping videos')
-    parser.add_argument("--swd_num_proj", type=int, default=128,
+    parser.add_argument("--swd_stride", type=int, default=2,
+                        help='produce looping videos')
+    parser.add_argument("--swd_stride_ref", type=int, default=2,
+                        help='produce looping videos')
+    parser.add_argument("--swd_stridet", type=int, default=2,
+                        help='produce looping videos')
+    parser.add_argument("--swd_stridet_ref", type=int, default=2,
                         help='produce looping videos')
     parser.add_argument("--swd_rou", type=float, default=0,
                         help='parameter of robustness term')
+    parser.add_argument("--swd_rou_ref", type=float, default=0,
+                        help='parameter of robustness term')
     parser.add_argument("--swd_scaling", type=float, default=0.2,
                         help='parameter of robustness term')
-    parser.add_argument("--lossname_ref", type=str, default='gpnn',
-                        help='gpnn, mse, swd, avg. gpnn_x to specify alpha==x')
-    parser.add_argument("--lossname_other", type=str, default='gpnn',
-                        help='gpnn, mse, swd, avg. gpnn_x to specify alpha==x')
-    parser.add_argument("--lossname_refidx", type=str, default='0',
-                        help='a,b,c swd_alpha = ref if view==swd_alpha_reference_viewidx else other')
+    parser.add_argument("--swd_scaling_ref", type=float, default=0.2,
+                        help='parameter of robustness term')
+    parser.add_argument("--swd_alpha", type=float, default=0,
+                        help='alpha, bigger than 100 is equivalent to None')
+    parser.add_argument("--swd_alpha_ref", type=float, default=0,
+                        help='alpha, bigger than 100 is equivalent to None')
+    parser.add_argument("--swd_dist_fn", type=str, default='mse',
+                        help='alpha, bigger than 100 is equivalent to None')
+    parser.add_argument("--swd_dist_fn_ref", type=str, default='mse',
+                        help='alpha, bigger than 100 is equivalent to None')
+    parser.add_argument("--swd_loss_gain_ref", type=float, default=1,
+                        help='alpha, bigger than 100 is equivalent to None')
+
     # pyramid configuration
     parser.add_argument("--pyr_stage", type=str, default='',
                         help='x,y,z,...   iteration to upsample')
@@ -59,6 +80,8 @@ def config_parser():
                         help='iter num in each level')
     parser.add_argument("--pyr_factor", type=float, default=0.5,
                         help='factor in each pyr level')
+    parser.add_argument("--swd_num_proj", type=int, default=128,
+                        help='produce looping videos')
 
     # for mpi
     parser.add_argument("--sparsify_epoch", type=int, default=-1,
@@ -164,9 +187,9 @@ def config_parser():
                         help='frequency of console printout and metric loggin')
     parser.add_argument("--i_weights", type=int, default=20000,
                         help='frequency of weight ckpt saving')
-    parser.add_argument("--i_testset", type=int, default=20000,
+    parser.add_argument("--i_testset", type=int, default=2000000000,
                         help='frequency of testset saving')
-    parser.add_argument("--i_eval", type=int, default=10000,
+    parser.add_argument("--i_eval", type=int, default=1000000000,
                         help='frequency of testset saving')
     parser.add_argument("--i_video",   type=int, default=10000,
                         help='frequency of render_poses video saving')

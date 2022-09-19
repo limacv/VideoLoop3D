@@ -22,7 +22,11 @@ files = [
     # "stair2water_mpv",
     # "stair2water_mpv_oneview",
     # "stair2water_mpv_avgview",
-    "synwater_mpv"
+    "synwater_mpv",
+    "synwater_mpv_smallpatch",
+    "synwater_mpv_ssim",
+    "synwater_mpv_stridet1",
+    # "synwater_mpv_stridet1_ssim",
 ]
 
 files = [file + ".txt" for file in files]
@@ -34,7 +38,7 @@ startjson = """
   "model_local_file_path": "/apdcephfs/private_leema/VideoLoop3D",
   "host_num": 1,
   "host_gpu_num": <gpu_num>,
-  "GPUName": "A100,V100",
+  "GPUName": "V100",
   "image_full_name": "mirrors.tencent.com/leema/svox2:0",
   "init_cmd": "jizhi_client mount -l cq ~/private_leema",
   "start_cmd": "conda activate /apdcephfs/private_leema/Environments/pt3d; python train_3dvid.py --config configs/<file_base>",
