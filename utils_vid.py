@@ -3,6 +3,7 @@ import torch.nn.functional as F
 from unfoldNd import UnfoldNd, FoldNd
 import numpy as np
 from pytorch_msssim import ssim
+import warnings
 
 
 def robust_lossfun(x, alpha, scale, epsilon=1e-6):
@@ -251,7 +252,7 @@ class Patch3DGPNNLowMemLoss:
         self.last_weight = None
 
     def __call__(self, x, y, mask=None, same_input=False,
-                 macro_block=64, patch_size=7, stride=7,
+                 macro_block=64, patch_size=7, stride=2, patcht_size=7, stridet=2,
                  rou=0, scaling=0.2, **kwargs):  # x is the src and y is the target
         """
         x, y: shape of B x 3 x f x h x w
@@ -261,29 +262,46 @@ class Patch3DGPNNLowMemLoss:
             y2x = self.last_y2x
         else:
             with torch.no_grad():
-                h, w = x.shape[-2:]
-                assert (macro_block - patch_size) % stride == 0, \
-                    'doesnot satisfy (macro_block - patch_size) % stride == 0'
+                t, h, w = x.shape[-3:]
+                if (t - patcht_size % stridet) != 0:
+                    t = (t - patcht_size) // stride * stride + patch_size
+                    x = x[..., :t, :, :]
 
-                h_starts = np.arange(0, h, macro_block - patch_size + stride)
-                w_starts = np.arange(0, w, macro_block - patch_size + stride)
+                def fit_patch(s_, name):
+                    if (s_ - patch_size) % stride != 0:
+                        new_s_ = (s_ - patch_size) // stride * stride + patch_size
+                        warnings.warn(f'{name} doesnot satisfy ({name} - patch_size) % stride == 0. '
+                                      f'changing {name} from {s_} to {new_s_}')
+                        return new_s_
+                    return s_
+
+                macro_block = fit_patch(macro_block, "macro_block")
+                h = fit_patch(h, "patch_height")
+                w = fit_patch(w, "patch_width")
+                x = x[..., :h, :w]
+                y = y[..., :h, :w]
+                macro_stride = macro_block - patch_size + stride
+                h_starts = np.arange(0, h - macro_block + macro_stride, macro_stride)
+                w_starts = np.arange(0, w - macro_block + macro_stride, macro_stride)
                 y2x = torch.zeros_like(x)
                 weight = torch.zeros_like(x[:, :1])
                 for h_start in h_starts:
-                    if h - h_start < patch_size:
-                        h_start -= patch_size
+                    # if h - h_start < patch_size:  # this checking is nolonger needed due to the fit_patch
+                    #     h_start -= patch_size
                     for w_start in w_starts:
-                        if w - w_start < patch_size:
-                            w_start -= patch_size
+                        # if w - w_start < patch_size:
+                        #     w_start -= patch_size
                         x_crop = x[..., h_start: h_start + macro_block, w_start: w_start + macro_block]
                         y_crop = y[..., h_start: h_start + macro_block, w_start: w_start + macro_block]
                         # partation input into different patches and process individually
                         y2x_crop, weight_crop = FindNNpatchAndMerge(x_crop, y_crop,
                                                                     patch_size=patch_size, stride=stride,
+                                                                    patcht_size=patcht_size, stridet=stridet,
                                                                     **kwargs)
                         y2x[..., h_start: h_start + macro_block, w_start: w_start + macro_block] += y2x_crop
                         weight[..., h_start: h_start + macro_block, w_start: w_start + macro_block] += weight_crop
 
+                assert weight.min() > 0.5  # delete afterwards
                 y2x = y2x / weight
                 self.last_weight = weight
                 self.last_y2x = y2x
