@@ -106,7 +106,7 @@ def get_col_mins_efficient(X, Y, chunksz, dist_fn):
     Returns (B, n2)
     """
     mins = torch.zeros(Y.shape[:2], dtype=X.dtype, device=X.device)
-    for starti in range(0, len(Y), chunksz):
+    for starti in range(0, Y.shape[1], chunksz):
         mins[:, starti: starti + chunksz] = dist_fn(X, Y[:, starti: starti + chunksz]).min(1)[0]
     return mins
 
@@ -194,7 +194,31 @@ class Patch3DSWDLoss(torch.nn.Module):
 
         return loss
 
-# def FindNNpatchAndMerge(x, y)
+
+def FindNNpatchAndMerge(x, y, patch_size=7, patcht_size=7, stride=1, stridet=1,
+                        alpha=1e10, dist_fn='mse'):
+    alpha = None if alpha > 100 else alpha
+    projx = extract_3Dpatches(x, patch_size, patcht_size, stride, stridet)  # b, c, d, h, w
+    b, c, d, h, w = projx.shape
+    B = b * h * w
+    D = d * h * w
+    projx = projx.permute(0, 3, 4, 2, 1).reshape(B, -1, 3, patcht_size, patch_size, patch_size)
+    projy = extract_3Dpatches(y, patch_size, patcht_size, stride, stridet)  # b, c, d, h, w
+    projy = projy.permute(0, 3, 4, 2, 1).reshape(B, -1, 3, patcht_size, patch_size, patch_size)
+    nns = get_NN_indices_low_memory(projx, projy, alpha, 1024, dist_fn)
+    projy2x = projy[torch.arange(B, device=nns.device)[:, None], nns]
+    fold = FoldNd(x.shape[-3:],
+                  kernel_size=(patcht_size, patch_size, patch_size),
+                  stride=(stridet, stride, stride))
+    projy2x_unfold = projy2x.reshape(b, h, w, d, c).permute(0, 4, 3, 1, 2)
+    projy2x_unfold = projy2x_unfold.reshape(b,
+                                            3, patcht_size, patch_size, patch_size,
+                                            D)
+    weight = torch.ones_like(projy2x_unfold[:, :1])
+    projy2x_unfold = torch.cat([projy2x_unfold, weight], dim=1)
+    y2x = fold(projy2x_unfold.reshape(b, -1, D))
+    weight = y2x[:, 3:].clamp_min(1e-10)
+    return y2x[:, :3], weight
 
 
 class Patch3DGPNNDirectLoss:
@@ -202,41 +226,69 @@ class Patch3DGPNNDirectLoss:
         self.last_y2x = None
         self.last_weight = None
 
-    def __call__(self, x, y, patch_size=7, patcht_size=7, stride=1, stridet=1,  alpha=1e10, rou=0, scaling=0.2,
-                 mask=None, same_input=False, dist_fn='mse'):  # x is the src and y is the target
+    def __call__(self, x, y, mask=None, same_input=False,
+                 rou=0, scaling=0.2, **kwargs):  # x is the src and y is the target
+        """
+        x, y: shape of
+        """
         if same_input:
             weight = self.last_weight
             y2x = self.last_y2x
         else:
-            alpha = None if alpha > 100 else alpha
-
             with torch.no_grad():
-                projx = extract_3Dpatches(x, patch_size, patcht_size, stride, stridet)  # b, c, d, h, w
-                b, c, d, h, w = projx.shape
-                B = b * h * w
-                D = d * h * w
-                projx = projx.permute(0, 3, 4, 2, 1).reshape(B, -1, 3, patcht_size, patch_size, patch_size)
-                projy = extract_3Dpatches(y, patch_size, patcht_size, stride, stridet)  # b, c, d, h, w
-                projy = projy.permute(0, 3, 4, 2, 1).reshape(B, -1, 3, patcht_size, patch_size, patch_size)
-                nns = get_NN_indices_low_memory(projx, projy, alpha, 1024, dist_fn)
-                projy2x = projy[torch.arange(B, device=nns.device)[:, None], nns]
-                fold = FoldNd(x.shape[-3:],
-                              kernel_size=(patch_size, patch_size, patcht_size),
-                              stride=(stride, stride, stridet))
-                projy2x_unfold = projy2x.reshape(b, h, w, d, c).permute(0, 4, 3, 1, 2)
-                projy2x_unfold = projy2x_unfold.reshape(b,
-                                                        3, patcht_size, patch_size, patch_size,
-                                                        D)
-                weight = torch.ones_like(projy2x_unfold[:, :1])
-                projy2x_unfold = torch.cat([projy2x_unfold, weight], dim=1)
-                y2x = fold(projy2x_unfold.reshape(b, -1, D))
-                weight = y2x[:, 3:].clamp_min(1e-10)
-                y2x = y2x[:, :3] / weight
-                weight = weight / weight.max()
+                y2x, weight = FindNNpatchAndMerge(x, y, **kwargs)
+                y2x = y2x / weight
                 self.last_weight = weight
                 self.last_y2x = y2x
 
-        loss = (robust_lossfun(x - y2x, rou, scaling) * weight).mean()
+        loss = robust_lossfun(x - y2x, rou, scaling).mean()
+        return loss
+
+
+class Patch3DGPNNLowMemLoss:
+    def __init__(self):
+        self.last_y2x = None
+        self.last_weight = None
+
+    def __call__(self, x, y, mask=None, same_input=False,
+                 macro_block=64, patch_size=7, stride=7,
+                 rou=0, scaling=0.2, **kwargs):  # x is the src and y is the target
+        """
+        x, y: shape of B x 3 x f x h x w
+        """
+        if same_input:
+            weight = self.last_weight
+            y2x = self.last_y2x
+        else:
+            with torch.no_grad():
+                h, w = x.shape[-2:]
+                assert (macro_block - patch_size) % stride == 0, \
+                    'doesnot satisfy (macro_block - patch_size) % stride == 0'
+
+                h_starts = np.arange(0, h, macro_block - patch_size + stride)
+                w_starts = np.arange(0, w, macro_block - patch_size + stride)
+                y2x = torch.zeros_like(x)
+                weight = torch.zeros_like(x[:, :1])
+                for h_start in h_starts:
+                    if h - h_start < patch_size:
+                        h_start -= patch_size
+                    for w_start in w_starts:
+                        if w - w_start < patch_size:
+                            w_start -= patch_size
+                        x_crop = x[..., h_start: h_start + macro_block, w_start: w_start + macro_block]
+                        y_crop = y[..., h_start: h_start + macro_block, w_start: w_start + macro_block]
+                        # partation input into different patches and process individually
+                        y2x_crop, weight_crop = FindNNpatchAndMerge(x_crop, y_crop,
+                                                                    patch_size=patch_size, stride=stride,
+                                                                    **kwargs)
+                        y2x[..., h_start: h_start + macro_block, w_start: w_start + macro_block] += y2x_crop
+                        weight[..., h_start: h_start + macro_block, w_start: w_start + macro_block] += weight_crop
+
+                y2x = y2x / weight
+                self.last_weight = weight
+                self.last_y2x = y2x
+
+        loss = robust_lossfun(x - y2x, rou, scaling).mean()
         return loss
 
 

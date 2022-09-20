@@ -10,7 +10,7 @@ from utils import *
 from NeRF_modules import get_embedder
 from utils_mpi import *
 import trimesh
-from utils_vid import Patch3DSWDLoss, Patch3DGPNNDirectLoss, Patch3DMSE, Patch3DAvg
+from utils_vid import Patch3DGPNNDirectLoss, Patch3DMSE, Patch3DAvg, Patch3DGPNNLowMemLoss
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer import (
     look_at_view_transform,
@@ -145,8 +145,9 @@ class MPMeshVid(nn.Module):
         self.losses = {
             'swd': None,
             'gpnn': Patch3DGPNNDirectLoss(),
+            'gpnn_lm': Patch3DGPNNLowMemLoss(),
             'mse': Patch3DMSE,
-            'avg': Patch3DAvg
+            'avg': Patch3DAvg,
         }
 
     def lod(self, factor):

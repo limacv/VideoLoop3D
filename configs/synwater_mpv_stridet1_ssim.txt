@@ -1,6 +1,6 @@
 gpu_num = 1
 # Dataset related
-expname = MPV_synwater720p_f30_v0Mse_otherGpnnP5Pt1S2St1Fnssim
+expname = MPV_synwater_f30_largeroi_v0Mse_otherGpnnlmP5Pt1S2St1Fnmse
 datadir = /apdcephfs/private_leema/data/VideoLoops/data/synwater720p/
 expdir  = /apdcephfs/private_leema/data/VideoLoops/logs
 factor = 2
@@ -20,11 +20,11 @@ atlas_grid_h = 4
 atlas_size_scale = 1
 
 # Training related
-patch_h_size = 64
-patch_w_size = 64
-patch_h_stride = 32
-patch_w_stride = 32
-lrate = 0.1
+patch_h_size = 180
+patch_h_stride = 90
+patch_w_size = 320
+patch_w_stride = 160
+lrate = 0.5
 lrate_decay = 100
 lrate_adaptive
 rgb_mlp_type = direct
@@ -44,7 +44,7 @@ i_video = 45
 
 # mpv configuration
 pyr_minimal_dim = 60
-pyr_num_epoch = 90
+pyr_num_epoch = 50
 pyr_factor = 0.75
 init_from = /apdcephfs/private_leema/data/VideoLoops/logs/synwater_avg_smth02/texture003500.png
 init_std = 0.1
@@ -54,20 +54,21 @@ mpv_frm_num = 30
 loss_ref_idx = 0
 swd_loss_gain_ref = 5
 loss_name_ref = mse
-loss_name = gpnn
+loss_name = gpnn_lm
+swd_macro_block = 65
 swd_alpha = 0
 swd_alpha_ref = 10000
 swd_patch_size = 5
-swd_patch_size_ref = 5
 swd_patcht_size = 1
-swd_patcht_size_ref = 5
 swd_stride = 2
-swd_stride_ref = 2
 swd_stridet = 1
-swd_stridet_ref = 2
-swd_dist_fn = ssim
-swd_dist_fn_ref = mse
+swd_dist_fn = mse
 swd_rou = 0
-swd_rou_ref = 0
 swd_scaling = 0.3
+swd_patch_size_ref = 5
+swd_patcht_size_ref = 1
+swd_stride_ref = 2
+swd_stridet_ref = 1
+swd_dist_fn_ref = mse
+swd_rou_ref = 0
 swd_scaling_ref = 0.3

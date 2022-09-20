@@ -23,14 +23,18 @@ files = [
     # "stair2water_mpv_oneview",
     # "stair2water_mpv_avgview",
     "synwater_mpv",
+    "synwater_mpv_gpnn",
     "synwater_mpv_smallpatch",
-    "synwater_mpv_ssim",
+    "synwater_mpv_smalltpatch",
     "synwater_mpv_stridet1",
+    # "synwater_mpv_ssim",
     # "synwater_mpv_stridet1_ssim",
 ]
 
 files = [file + ".txt" for file in files]
 
+# "enable_evicted_pulled_up": true,
+# "is_elasticity": true,
 startjson = """
 {
   "Token": "loCr7k16k3DEY7283MuFqA",

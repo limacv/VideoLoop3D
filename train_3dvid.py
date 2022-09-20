@@ -159,6 +159,7 @@ def train():
         "rou": args.swd_rou,
         "scaling": args.swd_scaling,
         "dist_fn": args.swd_dist_fn,
+        "macro_block": args.swd_macro_block,
     }
     loss_config_ref = {
         "loss_name": args.loss_name_ref,
@@ -171,6 +172,7 @@ def train():
         "rou": args.swd_rou_ref,
         "scaling": args.swd_scaling_ref,
         "dist_fn": args.swd_dist_fn_ref,
+        "macro_block": args.swd_macro_block,
     }
     loss_cfgs = [loss_config_other] * V
     ref_idx = list(map(int, args.loss_ref_idx.split(',')))

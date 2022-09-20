@@ -36,6 +36,8 @@ def config_parser():
                         help='gpnn, mse, swd, avg. gpnn_x to specify alpha==x')
     parser.add_argument("--loss_name_ref", type=str, default='gpnn',
                         help='gpnn, mse, swd, avg. gpnn_x to specify alpha==x')
+    parser.add_argument("--swd_macro_block", type=int, default=65,
+                        help='used for gpnn low mem')
     parser.add_argument("--swd_patch_size", type=int, default=5,
                         help='produce looping videos')
     parser.add_argument("--swd_patch_size_ref", type=int, default=5,
