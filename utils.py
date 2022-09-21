@@ -279,3 +279,20 @@ def dilate(alpha: torch.Tensor, kernelsz=3, dilate=1):
     alphaunfold = torch.nn.Unfold(kernelsz, dilation=dilate, padding=padding, stride=1)(alpha.reshape(-1, 1, hei, wid))
     alphaunfold = alphaunfold.max(dim=1)[0]
     return alphaunfold.reshape_as(alpha)
+
+
+class DataParallelCPU:
+    def __init__(self, module: nn.Module):
+        self.module = module
+
+    def to(self, device):
+        self.module.to(device)
+
+    def train(self):
+        self.module.train()
+
+    def eval(self):
+        self.module.eval()
+
+    def __call__(self, *args, **kwargs):
+        return self.module(*args, **kwargs)

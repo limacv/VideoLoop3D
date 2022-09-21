@@ -82,6 +82,9 @@ class MPMeshVid(nn.Module):
         atlas = torch.rand((1, args.atlas_cnl, int(self.atlas_h * scaling), int(self.atlas_w * scaling)))
         atlas_dyn = torch.randn((self.frm_num, 4, int(self.atlas_h * scaling), int(self.atlas_w * scaling))) \
                     * args.init_std
+        if args.fp16:
+            atlas = atlas.half()
+            atlas_dyn = atlas_dyn.half()
 
         # -1, 1 to 0, h
         # uvs = uvs * 0.5 + 0.5
@@ -299,11 +302,13 @@ class MPMeshVid(nn.Module):
             bary_coords_ma = bary_coords.reshape(-1, 3)[mask, :]  # N, 3
             uvs = (bary_coords_ma[..., None] * uvs).sum(dim=-2)
 
+            uvs = uvs.type_as(self.atlas)
+
         _, ray_direction = get_rays_tensor_batches(H, W, intrin, pose2extrin_torch(extrin))
         ray_direction = ray_direction / ray_direction.norm(dim=-1, keepdim=True)
         ray_direction = ray_direction[..., None, :].expand(pixel_to_face.shape + (3,))
         ray_d = ray_direction.reshape(-1, 3)[mask, :]
-        ray_d = self.view_embed_fn(ray_d.reshape(-1, 3))
+        ray_d = self.view_embed_fn(ray_d.reshape(-1, 3)).type_as(self.atlas)
 
         # uv from 0, S - 1  to -1, 1
         # uv_scaling = torch.tensor([

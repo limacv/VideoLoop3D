@@ -64,14 +64,14 @@ class MVVidPatchDataset(Dataset):
         intrin = get_new_intrin(self.intrins[view_idx], h_start, w_start).float()
         crops = self.videos[view_idx][..., h_start: h_start + self.patch_h_size, w_start: w_start + self.patch_w_size]
         cfg = deepcopy(self.loss_configs[view_idx])
-        return w_start, h_start, pose, intrin, crops.cuda(), cfg
+        return w_start, h_start, pose, intrin, crops, cfg
 
 
 def train(args):
-    # set up multi-processing
-    if args.gpu_num == -1:
-        args.gpu_num = torch.cuda.device_count()
-        print(f"Using {args.gpu_num} GPU(s)")
+    device = 'cuda:0'
+    if args.gpu_num <= 0:
+        device = 'cpu'
+        print(f"Using CPU for training")
 
     print(f"Training: {args.expname}")
     videos, poses, intrins, bds, render_poses, render_intrins = load_mv_videos(basedir=args.datadir,
@@ -133,8 +133,8 @@ def train(args):
     else:
         raise RuntimeError(f"Unrecognized model type {args.model_type}")
 
-    nerf = nn.DataParallel(nerf, list(range(args.gpu_num)))
-    nerf.cuda()
+    nerf = DataParallelCPU(nerf) if device == 'cpu' else nn.DataParallel(nerf, list(range(args.gpu_num)))
+    nerf.to(device)
     render_extrins = pose2extrin_np(render_poses)
     render_extrins = torch.tensor(render_extrins).float()
     render_intrins = torch.tensor(render_intrins).float()
@@ -194,7 +194,10 @@ def train(args):
 
     # begin of run one iteration (one patch)
     def run_iter(stepi, optimizer_, datainfo_):
+        datainfo_ = [d.to(device) if torch.is_tensor(d) else d for d in datainfo_]
         h_starts, w_starts, b_pose, b_intrin, b_rgbs, loss_cfg = datainfo_
+        if args.fp16:
+            b_rgbs = b_rgbs.half()
         b_extrin = pose2extrin_torch(b_pose)
         patch_h, patch_w = b_rgbs.shape[-2:]
 
@@ -259,7 +262,6 @@ def train(args):
                     param_group['lr'] = new_lrate
 
                 # train for one interation
-                datainfo = [d.cuda() if torch.is_tensor(d) else d for d in datainfo]
                 run_iter(iter_total_step, optimizer, datainfo)
 
                 iter_total_step += 1
