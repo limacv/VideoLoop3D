@@ -18,6 +18,8 @@ def config_parser():
     parser.add_argument("--bd_factor", type=float, default=0.75, help='expand factor of the ROI box')
     parser.add_argument("--chunk", type=int, default=1024 * 32,
                         help='number of rays processed in parallel, decrease if running out of memory')
+    parser.add_argument("--fp16", action='store_true',
+                        help='use half precision to train')
 
     # for MPV only, not used for MPMesh
     parser.add_argument("--mpv_frm_num", type=int, default=90,

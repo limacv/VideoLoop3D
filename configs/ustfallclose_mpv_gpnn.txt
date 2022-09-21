@@ -1,13 +1,13 @@
 gpu_num = 1
 # Dataset related
-expname = MPVGPNN_synwater_f30_largeroi_allvGpnnlmP5Pt5S2St2Fnmse_smalllr
-datadir = /apdcephfs/private_leema/data/VideoLoops/data/synwater720p/
+expname = MPVGPNN_ustfallclose_f30_largeroi_allvGpnnlmP5Pt5S2St2Fnmse
+datadir = /apdcephfs/private_leema/data/VideoLoops/data/ustfallclose720p/
 expdir  = /apdcephfs/private_leema/data/VideoLoops/logs
 factor = 2
-bd_factor = 0.75
+bd_factor = 0.85
 seed = 2
 model_type = MPMesh
-init_from = /apdcephfs/private_leema/data/VideoLoops/logs/synwater_avg_smth02/texture003500.png
+init_from = /apdcephfs/private_leema/data/VideoLoops/logs/MPVGPNN_ustfallclose_f30_largeroi_allvGpnnlmP5Pt5S2St2Fnmse/texture_epoch_0049.png
 
 # mpi configuration
 

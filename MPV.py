@@ -376,26 +376,26 @@ class MPMeshVid(nn.Module):
             main_loss = loss(rgb_pad.permute(1, 0, 2, 3)[None],
                              res.permute(0, 2, 1, 3, 4), **losscfg)
 
-            extra['swd'] = main_loss.reshape(1, -1) * (loss_gain * frm_num_ori)
+            extra['swd'] = main_loss.reshape(1, -1) * loss_gain
 
             if self.args.sparsity_loss_weight > 0:
                 alpha = variables["mpi"][..., -1]
                 sparsity = alpha.norm(dim=-1, p=1) / alpha.norm(dim=-1, p=2).clamp_min(1e-6)
-                sparsity = sparsity.mean() * frm_num_ori
+                sparsity = sparsity.mean() * loss_gain
                 extra["sparsity"] = sparsity.reshape(1, -1)
 
             if self.args.rgb_smooth_loss_weight > 0:
                 smooth = variables["mpi"][..., :-1]
                 smoothx = (smooth[:, :, :-1] - smooth[:, :, 1:]).abs().mean()
                 smoothy = (smooth[:, :-1] - smooth[:, 1:]).abs().mean()
-                smooth = (smoothx + smoothy).reshape(1, -1) * frm_num_ori
+                smooth = (smoothx + smoothy).reshape(1, -1) * loss_gain
                 extra["rgb_smooth"] = smooth.reshape(1, -1)
 
             if self.args.a_smooth_loss_weight > 0:
                 smooth = variables["mpi"][..., -1]
                 smoothx = (smooth[:, :, :-1] - smooth[:, :, 1:]).abs().mean()
                 smoothy = (smooth[:, :-1] - smooth[:, 1:]).abs().mean()
-                smooth = (smoothx + smoothy) * frm_num_ori
+                smooth = (smoothx + smoothy) * loss_gain
                 extra["a_smooth"] = smooth.reshape(1, -1)
 
             # if self.args.d_smooth_loss_weight > 0:

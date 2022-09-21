@@ -67,13 +67,7 @@ class MVVidPatchDataset(Dataset):
         return w_start, h_start, pose, intrin, crops.cuda(), cfg
 
 
-def train():
-    parser = config_parser()
-    args = parser.parse_args()
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
-
+def train(args):
     # set up multi-processing
     if args.gpu_num == -1:
         args.gpu_num = torch.cuda.device_count()
@@ -188,7 +182,7 @@ def train():
              for f in sorted(os.listdir(os.path.join(args.expdir, args.expname))) if 'tar' in f]
     print('Found ckpts', ckpts)
 
-    if len(ckpts) > 0 and not args.no_reload:
+    if False:  # len(ckpts) > 0:
         ckpt_path = ckpts[-1]
         print('Reloading from', ckpt_path)
         ckpt = torch.load(ckpt_path)
@@ -314,4 +308,10 @@ def train():
 
 
 if __name__ == '__main__':
-    train()
+    parser = config_parser()
+    args = parser.parse_args()
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+
+    train(args)

@@ -1,6 +1,6 @@
 gpu_num = 1
 # Dataset related
-expname = MPV_synwater_f30_largeroi_v0Mse_otherGpnnlmP5Pt5S2St2Fnmse
+expname = MPV_synwater_f30_largeroi_v0Mse_otherGpnnlmP5Pt5S2St2A100Fnmse
 datadir = /apdcephfs/private_leema/data/VideoLoops/data/synwater720p/
 expdir  = /apdcephfs/private_leema/data/VideoLoops/logs
 factor = 2
@@ -31,16 +31,16 @@ rgb_mlp_type = direct
 rgb_activate = sigmoid
 alpha_activate = sigmoid
 
-sparsity_loss_weight = 0.001
+sparsity_loss_weight = 0.0002
 rgb_smooth_loss_weight = 0.2
 a_smooth_loss_weight = 0.2
 #d_smooth_loss_weight = 0.1
 laplacian_loss_weight = 0   # to be adjusted
 
-i_img = 45
+i_img = 20
 i_print = 10
-i_weight = 90
-i_video = 45
+i_weight = 50
+i_video = 25
 
 # mpv configuration
 pyr_minimal_dim = 60
@@ -52,11 +52,11 @@ mpv_frm_num = 30
 # mpv_isloop
 
 loss_ref_idx = 0
-swd_loss_gain_ref = 5
+swd_loss_gain_ref = 1
 loss_name_ref = mse
 loss_name = gpnn_lm
 swd_macro_block = 65
-swd_alpha = 0
+swd_alpha = 10000
 swd_alpha_ref = 10000
 swd_patch_size = 5
 swd_patcht_size = 5

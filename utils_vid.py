@@ -261,25 +261,25 @@ class Patch3DGPNNLowMemLoss:
             weight = self.last_weight
             y2x = self.last_y2x
         else:
+            # standardlize the input
+            t, h, w = x.shape[-3:]
+
+            def fit_patch(s_, name, p_, st_):
+                if (s_ - p_) % st_ != 0:
+                    new_s_ = (s_ - p_) // st_ * st_ + p_
+                    warnings.warn(f'{name} doesnot satisfy ({name} - patch_size) % stride == 0. '
+                                  f'changing {name} from {s_} to {new_s_}')
+                    return new_s_
+                return s_
+
+            macro_block = fit_patch(macro_block, "macro_block", patch_size, stride)
+            h = fit_patch(h, "patch_height", patch_size, stride)
+            w = fit_patch(w, "patch_width", patch_size, stride)
+            t = fit_patch(t, "frame_num", patcht_size, stridet)
+            x = x[..., :t, :h, :w]
+            y = y[..., :h, :w]
+
             with torch.no_grad():
-                t, h, w = x.shape[-3:]
-                if (t - patcht_size % stridet) != 0:
-                    t = (t - patcht_size) // stride * stride + patch_size
-                    x = x[..., :t, :, :]
-
-                def fit_patch(s_, name):
-                    if (s_ - patch_size) % stride != 0:
-                        new_s_ = (s_ - patch_size) // stride * stride + patch_size
-                        warnings.warn(f'{name} doesnot satisfy ({name} - patch_size) % stride == 0. '
-                                      f'changing {name} from {s_} to {new_s_}')
-                        return new_s_
-                    return s_
-
-                macro_block = fit_patch(macro_block, "macro_block")
-                h = fit_patch(h, "patch_height")
-                w = fit_patch(w, "patch_width")
-                x = x[..., :h, :w]
-                y = y[..., :h, :w]
                 macro_stride = macro_block - patch_size + stride
                 h_starts = np.arange(0, h - macro_block + macro_stride, macro_stride)
                 w_starts = np.arange(0, w - macro_block + macro_stride, macro_stride)
@@ -301,7 +301,6 @@ class Patch3DGPNNLowMemLoss:
                         y2x[..., h_start: h_start + macro_block, w_start: w_start + macro_block] += y2x_crop
                         weight[..., h_start: h_start + macro_block, w_start: w_start + macro_block] += weight_crop
 
-                assert weight.min() > 0.5  # delete afterwards
                 y2x = y2x / weight
                 self.last_weight = weight
                 self.last_y2x = y2x

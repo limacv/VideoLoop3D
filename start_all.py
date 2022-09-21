@@ -22,13 +22,16 @@ files = [
     # "stair2water_mpv",
     # "stair2water_mpv_oneview",
     # "stair2water_mpv_avgview",
-    "synwater_mpv",
+    # "synwater_mpv",
     "synwater_mpv_gpnn",
-    "synwater_mpv_smallpatch",
-    "synwater_mpv_smalltpatch",
-    "synwater_mpv_stridet1",
+    # "synwater_mpv_smallpatch",
+    # "synwater_mpv_smalltpatch",
+    # "synwater_mpv_stridet1",
     # "synwater_mpv_ssim",
     # "synwater_mpv_stridet1_ssim",
+    # "ustfallclose_mpv_gpnn",
+    # "ustfallfar_mpv_gpnn",
+    # "usttap_mpv_gpnn",
 ]
 
 files = [file + ".txt" for file in files]
