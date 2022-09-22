@@ -1,3 +1,6 @@
 # --prefix /d1/scratch/PI/psander/data/VideoLoops
-python train_3d.py --config configs/droplet_mpmesh.txt
-python train_3dvid.py --config configs/droplet_mpv.txt --i_print 99999999
+CUDA_VISIBLE_DEVICES=6 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+  --config configs/ustfallclose_mpmesh.txt
+
+#CUDA_VISIBLE_DEVICES=7 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/ustfallclose_mpmesh_sh.txt 1> stdout/out1.txt 2> stdout/out1.txt &

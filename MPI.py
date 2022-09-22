@@ -32,6 +32,8 @@ ACTIVATES = {'relu': torch.relu,
              'clamp_g': lambda x: x + (torch.clamp(x, 0, 1) - x).detach(),
              'plus05': lambda x: x + 0.5}
 
+ALPHA_INIT_VAL = -2.
+
 
 class MPMesh(nn.Module):
     def __init__(self, args, H, W, ref_extrin, ref_intrin, near, far):
@@ -99,11 +101,12 @@ class MPMesh(nn.Module):
             self.feat2rgba = lambda x: x[..., :4]
             atlas_cnl = 4
             atlas = torch.rand((1, atlas_cnl, int(self.atlas_h), int(self.atlas_w)))
-            atlas[:, -1] = -2
+            atlas[:, -1] = ALPHA_INIT_VAL
             self.use_viewdirs = False
         elif args.rgb_mlp_type == "rgb_sh":
             atlas_cnl = 3 * 4 + 1  # one for alpha, 9 for base
             atlas = torch.rand((1, atlas_cnl, int(self.atlas_h), int(self.atlas_w)))
+            atlas[:, 0] = ALPHA_INIT_VAL
             self.feat2rgba = SphericalHarmoic_RGB(atlas_cnl, self.view_cnl)
             self.use_viewdirs = True
         elif args.rgb_mlp_type == "rgba_sh":
@@ -273,8 +276,9 @@ class MPMesh(nn.Module):
         chunksz = self.args.chunk
         alpha = torch.cat([self.feat2rgba(tex_input[batchi: batchi + chunksz])[..., -1:]
                            for batchi in range(0, len(tex_input), chunksz)])
+        alpha[alpha == ALPHA_INIT_VAL] = -10
         alpha = self.alpha_activate(alpha).reshape(1, 1, *self.atlas.shape[-2:])  # (1, 1, H, W)
-        for i in range(10):
+        for i in range(3):
             alpha = dilate(alpha)
 
         # sample to batches
@@ -414,6 +418,7 @@ class MPMesh(nn.Module):
             "depth": rgbd[..., -1],
             "alpha": blend_weight.sum(dim=-1)
         }
+
         return rgbd[..., :3], variables
 
     def forward(self, h, w, tar_extrins, tar_intrins):
@@ -426,7 +431,7 @@ class MPMesh(nn.Module):
             if self.args.sparsity_loss_weight > 0:
                 alpha = variables["mpi"][..., -1]
                 sparsity = alpha.norm(dim=-1, p=1) / alpha.norm(dim=-1, p=2).clamp_min(1e-6)
-                sparsity = sparsity.mean()
+                sparsity = sparsity.mean() / np.sqrt(alpha.shape[-1])  # so it's inrrelvant to the layer num
                 extra["sparsity"] = sparsity.reshape(1, -1)
 
             if self.args.rgb_smooth_loss_weight > 0:

@@ -1,8 +1,8 @@
 gpu_num = 1
 # Dataset related
 expname = debug
-datadir = M:\VideoLoops\data\droplet720p
-expdir  = M:\VideoLoops\logs
+datadir = D:\MSI_NB\source\data\VideoLoops\data\droplet720p
+expdir  = D:\MSI_NB\source\data\VideoLoops\logs
 factor = 2
 seed = 2
 model_type = MPMesh

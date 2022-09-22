@@ -169,16 +169,13 @@ def train():
     print('Found ckpts', ckpts)
 
     start = 0
-    if len(ckpts) > 0 and not args.no_reload:
+    if len(ckpts) > 0:
         ckpt_path = ckpts[-1]
         print('Reloading from', ckpt_path)
         ckpt = torch.load(ckpt_path)
 
-        start = ckpt['iter_total_step']
-        optimizer.load_state_dict(ckpt['optimizer_state_dict'])
-        smart_load_state_dict(nerf, ckpt)
-
-    iter_total_step = start
+        start = ckpt['epoch_i']
+        nerf.module.load_state_dict(ckpt['network_state_dict'])
 
     # begin of run one iteration (one patch)
     def run_iter(stepi, optimizer_, datainfo_):
@@ -239,13 +236,15 @@ def train():
         imageio.imwrite(p, to8b(img.permute(1, 2, 0).cpu().numpy()))
     dataloader = DataLoader(dataset, 1, shuffle=True)
 
+    iter_total_step = 0
     epoch_tqdm = trange(args.N_iters)
     for epoch_i in epoch_tqdm:
+        if epoch_i < start:
+            continue
+
         if epoch_i == args.sparsify_epoch:
             print("Sparsifying mesh models")
-            nerf.module.sparsify_faces()
-            print("Setting sparsity loss weight to 0")
-            nerf.module.args.sparsity_loss_weight = 0
+            nerf.module.sparsify_faces(alpha_thresh=args.sparsify_alpha_thresh)
             optimizer = nerf.module.get_optimizer()
 
         if epoch_i == args.direct2sh_epoch:
@@ -273,8 +272,7 @@ def train():
             save_path = os.path.join(expdir, args.expname, f'epoch_{epoch_i:04d}.tar')
             save_dict = {
                 'epoch_i': epoch_i,
-                'network_state_dict': nerf.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
+                'network_state_dict': nerf.module.state_dict()
             }
             torch.save(save_dict, save_path)
 

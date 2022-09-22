@@ -94,6 +94,8 @@ def config_parser():
                         help='sparsify the MPMesh in epoch')
     parser.add_argument("--direct2sh_epoch", type=int, default=-1,
                         help='converting direct to sh')
+    parser.add_argument("--sparsify_alpha_thresh", type=float, default=0.03,
+                        help='alpha thresh for sparsify')
     parser.add_argument("--vid2img_mode", type=str, default='average',
                         help='choose among average, median, static, dynamic')
     parser.add_argument("--mpi_h_scale", type=float, default=1.4,

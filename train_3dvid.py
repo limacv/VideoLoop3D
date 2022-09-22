@@ -278,7 +278,7 @@ def train(args):
                     'pyr_i': pyr_i,
                     'train_factor': train_factor,
                     'hw': hw,
-                    'network_state_dict': nerf.state_dict(),
+                    'network_state_dict': nerf.module.state_dict(),
                 }
                 torch.save(save_dict, save_path)
 
