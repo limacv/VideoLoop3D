@@ -107,7 +107,9 @@ def train():
         print(f"Using {args.gpu_num} GPU(s)")
 
     print(f"Training: {args.expname}")
-    videos, poses, intrins, bds, render_poses, render_intrins = load_mv_videos(basedir=args.datadir,
+    datadir = os.path.join(args.prefix, args.datadir)
+    expdir = os.path.join(args.prefix, args.expdir)
+    videos, poses, intrins, bds, render_poses, render_intrins = load_mv_videos(basedir=datadir,
                                                                                factor=args.factor,
                                                                                bd_factor=args.bd_factor,
                                                                                recenter=True)
@@ -121,11 +123,11 @@ def train():
     ref_near, ref_far = bds[:, 0].min(), bds[:, 1].max()
 
     # Summary writers
-    writer = SummaryWriter(os.path.join(args.expdir, args.expname))
+    writer = SummaryWriter(os.path.join(expdir, args.expname))
 
     # Create log dir and copy the config file
     if not args.render_only:
-        file_path = os.path.join(args.expdir, args.expname, f"source_{datetime.now().timestamp():.0f}")
+        file_path = os.path.join(expdir, args.expname, f"source_{datetime.now().timestamp():.0f}")
         os.makedirs(file_path, exist_ok=True)
         f = os.path.join(file_path, 'args.txt')
         with open(f, 'w') as file:
@@ -162,8 +164,8 @@ def train():
 
     ##########################
     # Load checkpoints
-    ckpts = [os.path.join(args.expdir, args.expname, f)
-             for f in sorted(os.listdir(os.path.join(args.expdir, args.expname))) if 'tar' in f]
+    ckpts = [os.path.join(expdir, args.expname, f)
+             for f in sorted(os.listdir(os.path.join(expdir, args.expname))) if 'tar' in f]
     print('Found ckpts', ckpts)
 
     start = 0
@@ -232,7 +234,7 @@ def train():
                              poses, intrins, args.vid2img_mode)
     # visualize the image, delete afterwards
     for viewi, img in enumerate(dataset.images):
-        p = os.path.join(args.expdir, args.expname, f"imgvis_{args.vid2img_mode}", f"{viewi:04d}.png")
+        p = os.path.join(expdir, args.expname, f"imgvis_{args.vid2img_mode}", f"{viewi:04d}.png")
         os.makedirs(os.path.dirname(p), exist_ok=True)
         imageio.imwrite(p, to8b(img.permute(1, 2, 0).cpu().numpy()))
     dataloader = DataLoader(dataset, 1, shuffle=True)
@@ -268,7 +270,7 @@ def train():
 
         ################################
         if (epoch_i + 1) % args.i_weights == 0:
-            save_path = os.path.join(args.expdir, args.expname, f'epoch_{epoch_i:04d}.tar')
+            save_path = os.path.join(expdir, args.expname, f'epoch_{epoch_i:04d}.tar')
             save_dict = {
                 'epoch_i': epoch_i,
                 'network_state_dict': nerf.state_dict(),
@@ -277,13 +279,13 @@ def train():
             torch.save(save_dict, save_path)
 
         if (epoch_i + 1) % args.i_video == 0:
-            moviebase = os.path.join(args.expdir, args.expname, f'epoch_{epoch_i:04d}_')
+            moviebase = os.path.join(expdir, args.expname, f'epoch_{epoch_i:04d}_')
             if hasattr(nerf.module, "save_mesh"):
-                prefix = os.path.join(args.expdir, args.expname, f"mesh_epoch_{epoch_i:04d}")
+                prefix = os.path.join(expdir, args.expname, f"mesh_epoch_{epoch_i:04d}")
                 nerf.module.save_mesh(prefix)
 
             if hasattr(nerf.module, "save_texture"):
-                prefix = os.path.join(args.expdir, args.expname, f"texture_epoch_{epoch_i:04d}")
+                prefix = os.path.join(expdir, args.expname, f"texture_epoch_{epoch_i:04d}")
                 nerf.module.save_texture(prefix)
 
             print('render poses shape', render_extrins.shape, render_intrins.shape)

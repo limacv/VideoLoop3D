@@ -174,7 +174,7 @@ class MPMeshVid(nn.Module):
              'lr': verts_lr}
         ]
         if args.optimizer == 'adam':
-            optimizer = torch.optim.Adam(params=params, lr=base_lr, betas=(0.9, 0.999))
+            optimizer = torch.optim.Adam(params=params, lr=base_lr, betas=(0.9, 0.999), eps=6e-8)
         elif args.optimizer == 'sgd':
             optimizer = torch.optim.SGD(params=params, lr=base_lr, momentum=0.9)
         else:
@@ -385,7 +385,7 @@ class MPMeshVid(nn.Module):
 
             if self.args.sparsity_loss_weight > 0:
                 alpha = variables["mpi"][..., -1]
-                sparsity = alpha.norm(dim=-1, p=1) / alpha.norm(dim=-1, p=2).clamp_min(1e-6)
+                sparsity = alpha.norm(dim=-1, p=1) / alpha.norm(dim=-1, p=2).clamp_min(1e-4)
                 sparsity = sparsity.mean() * loss_gain
                 extra["sparsity"] = sparsity.reshape(1, -1)
 

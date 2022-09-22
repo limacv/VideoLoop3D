@@ -5,6 +5,8 @@ def config_parser():
     parser = configargparse.ArgumentParser()
     parser.add_argument('--config', is_config_file=True,
                         help='config file path')
+    parser.add_argument("--prefix", type=str, default='',
+                        help='input data directory')
     parser.add_argument("--datadir", type=str,
                         help='input data directory')
     parser.add_argument("--expdir", type=str,
