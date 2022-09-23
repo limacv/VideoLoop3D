@@ -184,15 +184,15 @@ def train(args):
              for f in sorted(os.listdir(os.path.join(expdir, args.expname))) if 'tar' in f]
     print('Found ckpts', ckpts)
 
-    if False:  # len(ckpts) > 0:
-        ckpt_path = ckpts[-1]
+    if len(args.init_from) > 0:
+        ckpt_path = os.path.join(args.prefix, args.init_from)
+        assert os.path.exists(ckpt_path), f"Trying to load from {ckpt_path} but it doesn't exist"
         print('Reloading from', ckpt_path)
         ckpt = torch.load(ckpt_path)
 
-        start = ckpt['global_step']
-        optimizer = nerf.module.get_optimizer(start)
-        optimizer.load_state_dict(ckpt['optimizer_state_dict'])
-        smart_load_state_dict(nerf, ckpt)
+        state_dict = ckpt['network_state_dict']
+        nerf.module.init_from_mpi(state_dict)
+        nerf.to(device)
 
     # begin of run one iteration (one patch)
     def run_iter(stepi, optimizer_, datainfo_):

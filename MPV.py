@@ -30,16 +30,15 @@ class MPMeshVid(nn.Module):
         self.args = args
         self.frm_num = args.mpv_frm_num
         self.isloop = args.mpv_isloop
-        self.mpi_h, self.mpi_w = int(args.mpi_h_scale * H), int(args.mpi_w_scale * W)
-        self.mpi_d, self.near, self.far = args.mpi_d, near, far
+        mpi_h, mpi_w = int(args.mpi_h_scale * H), int(args.mpi_w_scale * W)
+        self.mpi_d = args.mpi_d
         self.mpi_h_verts, self.mpi_w_verts = args.mpi_h_verts, args.mpi_w_verts
         self.H, self.W = H, W
         self.atlas_grid_h, self.atlas_grid_w = args.atlas_grid_h, self.mpi_d // args.atlas_grid_h
-        self.atlas_size_scale = args.atlas_size_scale
-        self.atlas_h = int(self.atlas_grid_h * self.mpi_h * self.atlas_size_scale)
-        self.atlas_w = int(self.atlas_grid_w * self.mpi_w * self.atlas_size_scale)
-
         assert self.mpi_d % self.atlas_grid_h == 0, "mpi_d and atlas_grid_h should match"
+        self.is_sparse = False  # initialize to MPI
+        self.atlas_full_h = int(self.atlas_grid_h * mpi_h)
+        self.atlas_full_w = int(self.atlas_grid_w * mpi_w)
 
         assert ref_extrin.shape == (4, 4) and ref_intrin.shape == (3, 3)
         self.register_buffer("ref_extrin", torch.tensor(ref_extrin))
@@ -50,12 +49,12 @@ class MPMeshVid(nn.Module):
         self.register_buffer("planedepth", planedepth)
 
         # get intrin for mapping entire MPI to image, in order to generate vertices
-        self.H_start, self.W_start = (self.mpi_h - H) // 2, (self.mpi_w - W) // 2
+        self.H_start, self.W_start = (mpi_h - H) // 2, (mpi_w - W) // 2
         ref_intrin_mpi = get_new_intrin(self.ref_intrin, - self.H_start, - self.W_start)
 
         # generate primitive vertices
         # #############################
-        verts = gen_mpi_vertices(self.mpi_h, self.mpi_w, ref_intrin_mpi,
+        verts = gen_mpi_vertices(mpi_h, mpi_w, ref_intrin_mpi,
                                  args.mpi_h_verts, args.mpi_w_verts, planedepth)
         if args.normalize_verts:
             scaling = self.planedepth
@@ -79,8 +78,8 @@ class MPMeshVid(nn.Module):
         uvs = (uvs_plane.reshape(-1, 1, 2) + uvs_voxel.reshape(1, -1, 2)).reshape(-1, 2)
 
         scaling = 1
-        atlas = torch.rand((1, args.atlas_cnl, int(self.atlas_h * scaling), int(self.atlas_w * scaling)))
-        atlas_dyn = torch.randn((self.frm_num, 4, int(self.atlas_h * scaling), int(self.atlas_w * scaling))) \
+        atlas = torch.rand((1, args.atlas_cnl, int(self.atlas_full_h * scaling), int(self.atlas_full_w * scaling)))
+        atlas_dyn = torch.randn((self.frm_num, 4, int(self.atlas_full_h * scaling), int(self.atlas_full_w * scaling))) \
                     * args.init_std
         if args.fp16:
             atlas = atlas.half()
@@ -88,7 +87,7 @@ class MPMeshVid(nn.Module):
 
         # -1, 1 to 0, h
         # uvs = uvs * 0.5 + 0.5
-        # atlas_size = torch.tensor([int(self.atlas_w * scaling), int(self.atlas_h * scaling)]).reshape(-1, 2)
+        # atlas_size = torch.tensor([int(self.atlas_full_w * scaling), int(self.atlas_full_h * scaling)]).reshape(-1, 2)
         # uvs *= (atlas_size - 1).type_as(uvs)
 
         self.register_parameter("uvs", nn.Parameter(uvs, requires_grad=True))
@@ -136,9 +135,6 @@ class MPMeshVid(nn.Module):
         self.rgb_activate = ACTIVATES[args.rgb_activate]
         self.alpha_activate = ACTIVATES[args.alpha_activate]
 
-        # initialize self
-        self.initialize(args.init_from)
-
         # the SWD Loss
         self.swd_patch_size = args.swd_patch_size
         self.swd_patcht_size = args.swd_patcht_size
@@ -154,12 +150,60 @@ class MPMeshVid(nn.Module):
         }
 
     def lod(self, factor):
-        h, w = int(self.atlas_h * factor), int(self.atlas_w * factor)
-        print(f"MPV.log(): Resizing the atlas from {self.atlas.shape[-2:]} to {(h, w)}")
-        new_atlas = torchvision.transforms.Resize((h, w))(self.atlas.data)
-        new_atlas_dyn = torchvision.transforms.Resize((h, w))(self.atlas_dyn.data)
+        if not self.is_sparse:
+            h, w = int(self.atlas_full_h * factor), int(self.atlas_full_w * factor)
+            print(f"MPV.lod:: Resizing the atlas from {self.atlas.shape[-2:]} to {(h, w)}")
+            new_atlas = torchvision.transforms.Resize((h, w))(self.atlas.data)
+            new_atlas_dyn = torchvision.transforms.Resize((h, w))(self.atlas_dyn.data)
+        else:
+            atlas_h, atlas_w = self.atlas.shape[-2:]
+            gridh, gridw = self.atlas_grid_h, self.atlas_grid_w
+            tileh, tilew = atlas_h // self.atlas_grid_h, atlas_w // self.atlas_grid_w
+            fulltileh, fulltilew = self.atlas_full_h // self.atlas_grid_h, self.atlas_full_w // self.atlas_grid_w
+            newtileh, newtilew = max(int(fulltileh * factor), 2), max(int(fulltilew * factor), 2)
+            if newtileh == tileh and newtilew == tilew:
+                print(f"MPV.lod:: no need to resize")
+                return
+            print(f"MPV.lod:: Sparse! Resizing the tiles from {(tileh, tilew)} to {(newtileh, newtilew)}")
+
+            def resize_atlas(a_):
+                b, c = a_.shape[:2]
+                a_ = a_.reshape(b, c, gridh, tileh, gridw, tilew)
+                a_ = a_.permute(0, 2, 4, 1, 3, 5)  # b, gh, gw, c, th, tw
+                a_ = torchvision.transforms.Resize((newtileh, newtilew))(a_.reshape(-1, c, tileh, tilew))
+                a_ = a_.reshape(b, gridh, gridw, c, newtileh, newtilew).permute(0, 3, 1, 4, 2, 5)
+                return a_.reshape(b, c, gridh * newtileh, gridw * newtilew)
+
+            new_atlas = resize_atlas(self.atlas.data)
+            new_atlas_dyn = resize_atlas(self.atlas_dyn.data)
+
+            # need to recompute the uv to prevent the anti-aliasing effect
+            new_atlas_h, new_atlas_w = new_atlas.shape[-2:]
+            uvs = self.uvs.data.detach()
+            pixel_idx_x = (uvs[:, 0] + 1) / 2 * (atlas_w - 1)
+            pixel_idx_x = torch.round(pixel_idx_x).type(torch.int64)
+            tile_idx_x = pixel_idx_x // tilew
+            tile_pixel_x = pixel_idx_x % tilew
+            assert torch.all(torch.logical_or(tile_pixel_x == 0, tile_pixel_x == (tilew - 1)))
+            tile_pixel_x[tile_pixel_x == (tilew - 1)] = newtilew - 1
+            new_pixel_idx_x = tile_idx_x * newtilew + tile_pixel_x
+            new_uvs_x = new_pixel_idx_x / (new_atlas_w - 1) * 2 - 1
+
+            pixel_idx_y = (uvs[:, 1] + 1) / 2 * (atlas_h - 1)
+            pixel_idx_y = torch.round(pixel_idx_y).type(torch.int64)
+            tile_idx_y = pixel_idx_y // tileh
+            tile_pixel_y = pixel_idx_y % tileh
+            assert torch.all(torch.logical_or(tile_pixel_y == 0, tile_pixel_y == (tileh - 1)))
+            tile_pixel_y[tile_pixel_y == (tileh - 1)] = newtileh - 1
+            new_pixel_idx_y = tile_idx_y * newtileh + tile_pixel_y
+            new_uvs_y = new_pixel_idx_y / (new_atlas_h - 1) * 2 - 1
+
+            self.uvs.data[:, 0] = new_uvs_x
+            self.uvs.data[:, 1] = new_uvs_y
+
         self.register_parameter("atlas", nn.Parameter(new_atlas, requires_grad=True))
         self.register_parameter("atlas_dyn", nn.Parameter(new_atlas_dyn, requires_grad=True))
+        print("MPV.los:: Resizing successful !")
 
     def get_optimizer(self, step):
         args = self.args
@@ -196,31 +240,23 @@ class MPMeshVid(nn.Module):
         if step >= self.args.optimize_geo_start:
             self.optimize_geometry = True
 
-    def initialize(self, method: str):
-        if len(method) == 0 or method == "noise":
-            pass  # already initialized
-        elif os.path.exists(method) and method.endswith('.tar'):  # path to atlas
-            self.load_state_dict(torch.load(method))
-        elif os.path.exists(method) and method.endswith('.png'):  # path to atlas
-            assert self.rgb_activate is ACTIVATES['sigmoid'] \
-                   and self.alpha_activate is ACTIVATES['sigmoid'] \
-                   and self.rgb_mlp_type == 'direct'
-            atlas = imageio.imread(method)
-            if atlas.shape[:2] != (self.atlas_h, self.atlas_w):
-                print(f"[WARNING] when initialize from {method}, "
-                      f"resize from {atlas.shape[:2]} to {(self.atlas_h, self.atlas_w)}")
-                atlas = cv2.resize(atlas, (self.atlas_w, self.atlas_h), interpolation=cv2.INTER_AREA)
-            atlas = ACTIVATES['unsigmoid'](torch.tensor(atlas) / 255)
-            atlas = atlas.permute(2, 0, 1)[None].type_as(self.atlas)
-            self.atlas.data[:] = atlas
-            # self.atlas
-        else:  # prefix
-            raise RuntimeError(f"[ERROR] initialize method {method} not recognized")
-            # tex_file = method + "_atlas.png"  # todo: saving geometry
-            # assert os.path.exists(tex_file)
-            # atlas = imageio.imread(tex_file)
-            # atlas = torch.tensor(atlas) / 255
-            # self.atlas
+    def init_from_mpi(self, state_dict):
+        self._verts.data = state_dict['_verts'].type_as(self._verts)
+        self.uvs.data = state_dict['uvs'].type_as(self.uvs)
+        self.atlas.data = state_dict['atlas'].type_as(self.atlas)
+        self.uvfaces.data = state_dict['uvfaces'].type_as(self.uvfaces)
+        self.faces.data = state_dict['faces'].type_as(self.faces)
+        self.ref_extrin.data = state_dict['ref_extrin'].type_as(self.ref_extrin)
+        self.ref_intrin.data = state_dict['ref_intrin'].type_as(self.ref_intrin)
+        self.planedepth.data = state_dict['planedepth'].type_as(self.planedepth)
+        self.is_sparse = state_dict["self.is_sparse"]
+        self.atlas_full_w = state_dict["self.atlas_full_w"]
+        self.atlas_full_h = state_dict["self.atlas_full_h"]
+        self.atlas_grid_h = state_dict["self.atlas_grid_h"]
+        self.atlas_grid_w = state_dict["self.atlas_grid_w"]
+
+        atlas_dyn = torch.randn((self.frm_num, 4, self.atlas_full_h, self.atlas_full_w)) * self.args.init_std
+        self.atlas_dyn.data = atlas_dyn
 
     def save_mesh(self, prefix):
         vertices, faces, uvs = self.verts.detach(), self.faces.detach(), self.uvs.detach()
@@ -297,8 +333,8 @@ class MPMeshVid(nn.Module):
             # currently the batching is not supported
             mask = pixel_to_face.reshape(-1) >= 0
             faces_ma = pixel_to_face.reshape(-1)[mask]
-            vertices_index = faces[0, faces_ma]
-            uvs = self.uvs[vertices_index]  # N, 3, n_feat
+            uv_indices = self.uvfaces[faces_ma]
+            uvs = self.uvs[uv_indices]  # N, 3, n_feat
             bary_coords_ma = bary_coords.reshape(-1, 3)[mask, :]  # N, 3
             uvs = (bary_coords_ma[..., None] * uvs).sum(dim=-2)
 

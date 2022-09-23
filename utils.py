@@ -259,13 +259,6 @@ def sample_pdf(bins, weights, N_samples, det=False, pytest=False):
     return samples
 
 
-def smart_load_state_dict(model: nn.Module, state_dict: dict):
-    if isinstance(model, nn.DataParallel):
-        model = model.module
-
-    model.load_state_dict(state_dict)
-
-
 def gaussian(img, kernel_size):
     return GaussianBlur(kernel_size)(img)
 

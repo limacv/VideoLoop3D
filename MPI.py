@@ -40,16 +40,15 @@ class MPMesh(nn.Module):
         super(MPMesh, self).__init__()
         self.args = args
         self.upsample_stage = args.upsample_stage
-        self.mpi_h, self.mpi_w = int(args.mpi_h_scale * H), int(args.mpi_w_scale * W)
+        mpi_h, mpi_w = int(args.mpi_h_scale * H), int(args.mpi_w_scale * W)
         self.mpi_d, self.near, self.far = args.mpi_d, near, far
         self.mpi_h_verts, self.mpi_w_verts = args.mpi_h_verts, args.mpi_w_verts
         self.H, self.W = H, W
         self.atlas_grid_h, self.atlas_grid_w = args.atlas_grid_h, self.mpi_d // args.atlas_grid_h
-        self.atlas_size_scale = args.atlas_size_scale
-        self.atlas_h = int(self.atlas_grid_h * self.mpi_h * self.atlas_size_scale)
-        self.atlas_w = int(self.atlas_grid_w * self.mpi_w * self.atlas_size_scale)
-
         assert self.mpi_d % self.atlas_grid_h == 0, "mpi_d and atlas_grid_h should match"
+        self.is_sparse = False
+        self.atlas_full_h = int(self.atlas_grid_h * mpi_h)
+        self.atlas_full_w = int(self.atlas_grid_w * mpi_w)
 
         assert ref_extrin.shape == (4, 4) and ref_intrin.shape == (3, 3)
         self.register_buffer("ref_extrin", torch.tensor(ref_extrin))
@@ -60,12 +59,12 @@ class MPMesh(nn.Module):
         self.register_buffer("planedepth", planedepth)
 
         # get intrin for mapping entire MPI to image, in order to generate vertices
-        self.H_start, self.W_start = (self.mpi_h - H) // 2, (self.mpi_w - W) // 2
+        self.H_start, self.W_start = (mpi_h - H) // 2, (mpi_w - W) // 2
         ref_intrin_mpi = get_new_intrin(self.ref_intrin, - self.H_start, - self.W_start)
 
         # generate primitive vertices
         # #############################
-        verts = gen_mpi_vertices(self.mpi_h, self.mpi_w, ref_intrin_mpi,
+        verts = gen_mpi_vertices(mpi_h, mpi_w, ref_intrin_mpi,
                                  args.mpi_h_verts, args.mpi_w_verts, planedepth)
         if args.normalize_verts:
             scaling = self.planedepth
@@ -100,18 +99,18 @@ class MPMesh(nn.Module):
         if args.rgb_mlp_type == "direct":
             self.feat2rgba = lambda x: x[..., :4]
             atlas_cnl = 4
-            atlas = torch.rand((1, atlas_cnl, int(self.atlas_h), int(self.atlas_w)))
+            atlas = torch.rand((1, atlas_cnl, int(self.atlas_full_h), int(self.atlas_full_w)))
             atlas[:, -1] = ALPHA_INIT_VAL
             self.use_viewdirs = False
         elif args.rgb_mlp_type == "rgb_sh":
             atlas_cnl = 3 * 4 + 1  # one for alpha, 9 for base
-            atlas = torch.rand((1, atlas_cnl, int(self.atlas_h), int(self.atlas_w)))
+            atlas = torch.rand((1, atlas_cnl, int(self.atlas_full_h), int(self.atlas_full_w)))
             atlas[:, 0] = ALPHA_INIT_VAL
             self.feat2rgba = SphericalHarmoic_RGB(atlas_cnl, self.view_cnl)
             self.use_viewdirs = True
         elif args.rgb_mlp_type == "rgba_sh":
             atlas_cnl = 4 * 4  # 9 for each channel
-            atlas = torch.rand((1, atlas_cnl, int(self.atlas_h), int(self.atlas_w)))
+            atlas = torch.rand((1, atlas_cnl, int(self.atlas_full_h), int(self.atlas_full_w)))
             self.feat2rgba = SphericalHarmoic_RGBA(atlas_cnl, self.view_cnl)
             self.use_viewdirs = True
         else:
@@ -120,9 +119,6 @@ class MPMesh(nn.Module):
         self.register_parameter("atlas", nn.Parameter(atlas, requires_grad=True))
         self.rgb_activate = ACTIVATES[args.rgb_activate]
         self.alpha_activate = ACTIVATES[args.alpha_activate]
-
-        # initialize self
-        self.initialize(args.init_from)
 
     def get_optimizer(self):
         args = self.args
@@ -163,7 +159,7 @@ class MPMesh(nn.Module):
         # decide upsample
         # if step in self.upsample_stage:
         #     scaling = 0.5 ** (len(self.upsample_stage) - self.upsample_stage.index(step) - 1)
-        #     scaled_size = int(self.atlas_h * scaling), int(self.atlas_w * scaling)
+        #     scaled_size = int(self.atlas_full_h * scaling), int(self.atlas_full_w * scaling)
         #     print(f"  Upsample to {scaled_size} in step {step}")
         #     self.register_parameter("atlas",
         #                             nn.Parameter(
@@ -176,31 +172,14 @@ class MPMesh(nn.Module):
         #         ]).reshape(-1, 2).type_as(self.uvs)
         #         self.uvs *= uv_scaling
 
-    def initialize(self, method: str):
-        if len(method) == 0 or method == "noise":
-            pass  # already initialized
-        elif os.path.exists(method) and method.endswith('.tar'):  # path to atlas
-            self.load_state_dict(torch.load(method))
-        elif os.path.exists(method) and method.endswith('.png'):  # path to atlas
-            assert self.rgb_activate is ACTIVATES['sigmoid'] \
-                   and self.alpha_activate is ACTIVATES['sigmoid'] \
-                   and self.rgb_mlp_type == 'direct'
-            atlas = imageio.imread(method)
-            if atlas.shape[:2] != (self.atlas_h, self.atlas_w):
-                print(f"[WARNING] when initialize from {method}, "
-                      f"resize from {atlas.shape[:2]} to {(self.atlas_h, self.atlas_w)}")
-                atlas = cv2.resize(atlas, (self.atlas_w, self.atlas_h), interpolation=cv2.INTER_AREA)
-            atlas = ACTIVATES['unsigmoid'](torch.tensor(atlas) / 255)
-            atlas = atlas.permute(2, 0, 1)[None].type_as(self.atlas)
-            self.atlas.data[:] = atlas
-            # self.atlas
-        else:  # prefix
-            raise RuntimeError(f"[ERROR] initialize method {method} not recognized")
-            # tex_file = method + "_atlas.png"  # todo: saving geometry
-            # assert os.path.exists(tex_file)
-            # atlas = imageio.imread(tex_file)
-            # atlas = torch.tensor(atlas) / 255
-            # self.atlas
+    def state_dict(self, destination=None, prefix='', keep_vars=False):
+        state_dict = super().state_dict()
+        state_dict["self.is_sparse"] = self.is_sparse
+        state_dict["self.atlas_full_w"] = self.atlas_full_w
+        state_dict["self.atlas_full_h"] = self.atlas_full_h
+        state_dict["self.atlas_grid_h"] = self.atlas_grid_h
+        state_dict["self.atlas_grid_w"] = self.atlas_grid_w
+        return state_dict
 
     def save_mesh(self, prefix):
         vertices, faces, uvs = self.verts.detach(), self.faces.detach(), self.uvs.detach()
@@ -282,6 +261,7 @@ class MPMesh(nn.Module):
             alpha = dilate(alpha)
 
         # sample to batches
+        # !!!!!!!!!!!Align_corners=True indicates that -1 is the left-most pixel, 1 is the right-most pixel
         atlases = torchf.grid_sample(self.atlas.expand(n_quad, -1, -1, -1), grid, align_corners=True)
         atlases = atlases.permute(0, 2, 3, 1)
 
@@ -325,6 +305,9 @@ class MPMesh(nn.Module):
         uvid0 = torch.arange(n_mask).type_as(self.uvfaces) * 4
         uvfaces = uvid0[:, None, None] + uvid_offset[None]
 
+        self.is_sparse = True
+        self.atlas_grid_h, self.atlas_grid_w = n_height, n_width
+        self.atlas_full_h, self.atlas_full_w = n_height * imsz_h, n_width * imsz_w
         self.register_parameter("uvs", nn.Parameter(quad_uvs.reshape(-1, 2), requires_grad=True))
         self.register_buffer("uvfaces", uvfaces.reshape(-1, 3).long())
         self.register_buffer("faces", new_faces.long())

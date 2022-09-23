@@ -1,22 +1,20 @@
 gpu_num = 1
 # Dataset related
-expname = ustfallclose_v08GpnnlmA0Gain4P5Pt5S2St2Fnmse_otherGpnnlmA100P3Pt1S2St1Fnmse
-datadir = /apdcephfs/private_leema/data/VideoLoops/data/ustfallclose720p/
-expdir  = /apdcephfs/private_leema/data/VideoLoops/logs
+expname = ustfallclose_v0268GpnnlmA0Gain2P5Pt3S2St1Fnmse_otherGpnnlmA100P3Pt3S2St1Fnmse_sparse
+datadir = data/ustfallclose720p
+expdir  = logs
+init_from = meshlogs/ustfallclose720p_dyn_smth02_sparsity0004_fullsparsifyThresh005/epoch_0119.tar
 factor = 2
 bd_factor = 0.85
 seed = 2
 model_type = MPMesh
-fp16
 
 # mpi configuration
-
 mpi_h_scale = 1.1
 mpi_w_scale = 1.1
 mpi_h_verts = 27
 mpi_w_verts = 48
 mpi_d = 16
-atlas_cnl = 4
 atlas_grid_h = 4
 atlas_size_scale = 1
 
@@ -32,7 +30,7 @@ rgb_mlp_type = direct
 rgb_activate = sigmoid
 alpha_activate = sigmoid
 
-sparsity_loss_weight = 0.0002
+sparsity_loss_weight = 0.004
 rgb_smooth_loss_weight = 0.2
 a_smooth_loss_weight = 0.2
 #d_smooth_loss_weight = 0.1
@@ -44,31 +42,31 @@ i_weight = 50
 i_video = 25
 
 # mpv configuration
-pyr_minimal_dim = 60
+pyr_minimal_dim = 65
 pyr_num_epoch = 50
 pyr_factor = 0.75
-init_std = 0.1
+init_std = 0.02
 mpv_frm_num = 30
 mpv_isloop
 
-loss_ref_idx = 0,8
-swd_loss_gain_ref = 4
+loss_ref_idx = 0,2,6,8
+swd_loss_gain_ref = 2
 loss_name_ref = gpnn_lm
 loss_name = gpnn_lm
 swd_macro_block = 65
 swd_alpha = 10000
 swd_alpha_ref = 0
 swd_patch_size = 3
-swd_patcht_size = 1
+swd_patcht_size = 3
 swd_stride = 2
 swd_stridet = 1
 swd_dist_fn = mse
 swd_rou = 0
 swd_scaling = 0.3
 swd_patch_size_ref = 5
-swd_patcht_size_ref = 5
+swd_patcht_size_ref = 3
 swd_stride_ref = 2
-swd_stridet_ref = 2
+swd_stridet_ref = 1
 swd_dist_fn_ref = mse
 swd_rou_ref = 0
 swd_scaling_ref = 0.3

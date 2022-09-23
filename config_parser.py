@@ -29,7 +29,7 @@ def config_parser():
     parser.add_argument("--mpv_isloop", action='store_true',
                         help='produce looping videos')
     parser.add_argument("--init_from", type=str, default='',
-                        help='noise / <path to tar file> / prefix')
+                        help='path to ckpt, will add prefix, currently only support reload from MPI')
     parser.add_argument("--init_std", type=float, default=0,
                         help='noise std of the dynamic MPV')
 
@@ -98,9 +98,9 @@ def config_parser():
                         help='alpha thresh for sparsify')
     parser.add_argument("--vid2img_mode", type=str, default='average',
                         help='choose among average, median, static, dynamic')
-    parser.add_argument("--mpi_h_scale", type=float, default=1.4,
+    parser.add_argument("--mpi_h_scale", type=float, default=1,
                         help='the height of the stored MPI is <mpi_h_scale * H>')
-    parser.add_argument("--mpi_w_scale", type=float, default=1.4,
+    parser.add_argument("--mpi_w_scale", type=float, default=1,
                         help='the width of the stored MPI is <mpi_w_scale * W>')
     parser.add_argument("--mpi_h_verts", type=int, default=12,
                         help='the height of the stored MPI is <mpi_h_scale * H>')
