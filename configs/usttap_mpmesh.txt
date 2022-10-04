@@ -1,6 +1,6 @@
 gpu_num = 1
 # Dataset related
-expname = usttap720p32layer_dyn_smth02_sparsity0004_density5_fullsparsifyThresh005_erode3
+expname = usttap720p32layer_dyn_smth02_sparsity0004_density1
 datadir = data/usttap720p
 expdir  = meshlogs
 factor = 2

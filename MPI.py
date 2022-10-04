@@ -440,6 +440,11 @@ class MPMesh(nn.Module):
                 smooth = (smoothx + smoothy).reshape(1, -1)
                 extra["d_smooth"] = smooth.reshape(1, -1)
 
+            if self.args.density_loss_weight > 0:
+                alpha = variables["alpha"]
+                density = (alpha - 1).abs().mean()
+                extra["density"] = density.reshape(1, -1)
+
             if self.args.laplacian_loss_weight > 0:
                 verts = self.verts.reshape(self.mpi_d, self.mpi_h_verts, self.mpi_w_verts, -1)
                 verts_pad = torch.cat([
