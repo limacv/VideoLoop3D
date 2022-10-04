@@ -274,6 +274,17 @@ def dilate(alpha: torch.Tensor, kernelsz=3, dilate=1):
     return alphaunfold.reshape_as(alpha)
 
 
+def erode(alpha: torch.Tensor, kernelsz=3, dilate=1):
+    """
+    alpha: B x L x H x W
+    """
+    padding = (dilate * (kernelsz - 1) + 1) // 2
+    batchsz, layernum, hei, wid = alpha.shape
+    alphaunfold = torch.nn.Unfold(kernelsz, dilation=dilate, padding=padding, stride=1)(alpha.reshape(-1, 1, hei, wid))
+    alphaunfold = alphaunfold.min(dim=1)[0]
+    return alphaunfold.reshape_as(alpha)
+
+
 class DataParallelCPU:
     def __init__(self, module: nn.Module):
         self.module = module

@@ -109,10 +109,10 @@ def train():
     print(f"Training: {args.expname}")
     datadir = os.path.join(args.prefix, args.datadir)
     expdir = os.path.join(args.prefix, args.expdir)
-    videos, poses, intrins, bds, render_poses, render_intrins = load_mv_videos(basedir=datadir,
-                                                                               factor=args.factor,
-                                                                               bd_factor=args.bd_factor,
-                                                                               recenter=True)
+    videos, _, poses, intrins, bds, render_poses, render_intrins = load_mv_videos(basedir=datadir,
+                                                                                  factor=args.factor,
+                                                                                  bd_factor=args.bd_factor,
+                                                                                  recenter=True)
     H, W = videos[0][0].shape[0:2]
     V = len(videos)
     print('Loaded llff', V, H, W, poses.shape, intrins.shape, render_poses.shape, bds.shape)
@@ -218,6 +218,7 @@ def train():
         if stepi % args.i_print == 0:
             epoch_tqdm.set_description(f"[TRAIN] Iter: {stepi} Loss: {loss.item():.4f} PSNR: {psnr.item():.4f}",
                                        "|".join([f"{k}: {v.item():.4f}" for k, v in extra_losses.items()]))
+
     # end of run one iteration
 
     # ##########################

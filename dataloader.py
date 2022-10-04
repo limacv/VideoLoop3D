@@ -134,7 +134,9 @@ def load_mv_videos(basedir, factor=1, recenter=True, bd_factor=.75):
                                                                           load_img=False)
     videos_path = sorted(glob.glob(basedir + f"/videos_{factor}/*"))
     videos = [imageio.mimread(vp, memtest=False) for vp in videos_path]
-    return videos, poses, intrins, bds, render_poses, render_intrins
+    cap = cv2.VideoCapture(videos_path[0])
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    return videos, fps, poses, intrins, bds, render_poses, render_intrins
 
 
 def load_masks(imgpaths):

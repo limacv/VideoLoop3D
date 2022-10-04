@@ -255,8 +255,20 @@ class MPMeshVid(nn.Module):
         self.atlas_grid_h = state_dict["self.atlas_grid_h"]
         self.atlas_grid_w = state_dict["self.atlas_grid_w"]
 
-        atlas_dyn = torch.randn((self.frm_num, 4, self.atlas_full_h, self.atlas_full_w)) * self.args.init_std
-        self.atlas_dyn.data = atlas_dyn
+        if 'atlas_dyn' in state_dict.keys():
+            atlas_dyn = state_dict['atlas_dyn']
+        else:
+            atlas_dyn = torch.randn((self.frm_num, 4, self.atlas_full_h, self.atlas_full_w)) * self.args.init_std
+        self.atlas_dyn.data = atlas_dyn.type_as(self.atlas)
+
+    def state_dict(self, destination=None, prefix='', keep_vars=False):
+        state_dict = super().state_dict()
+        state_dict["self.is_sparse"] = self.is_sparse
+        state_dict["self.atlas_full_w"] = self.atlas_full_w
+        state_dict["self.atlas_full_h"] = self.atlas_full_h
+        state_dict["self.atlas_grid_h"] = self.atlas_grid_h
+        state_dict["self.atlas_grid_w"] = self.atlas_grid_w
+        return state_dict
 
     def save_mesh(self, prefix):
         vertices, faces, uvs = self.verts.detach(), self.faces.detach(), self.uvs.detach()
@@ -438,6 +450,11 @@ class MPMeshVid(nn.Module):
                 smoothy = (smooth[:, :-1] - smooth[:, 1:]).abs().mean()
                 smooth = (smoothx + smoothy) * loss_gain
                 extra["a_smooth"] = smooth.reshape(1, -1)
+
+            if self.args.density_loss_weight > 0:
+                alpha = variables["alpha"]
+                density = ((alpha - 1) ** 2).mean() * loss_gain
+                extra["density"] = density.reshape(1, -1)
 
             # if self.args.d_smooth_loss_weight > 0:
             #     depth = variables['depth']

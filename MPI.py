@@ -32,7 +32,7 @@ ACTIVATES = {'relu': torch.relu,
              'clamp_g': lambda x: x + (torch.clamp(x, 0, 1) - x).detach(),
              'plus05': lambda x: x + 0.5}
 
-ALPHA_INIT_VAL = -2.
+ALPHA_INIT_VAL = -3.
 
 
 class MPMesh(nn.Module):
@@ -258,6 +258,8 @@ class MPMesh(nn.Module):
         alpha[alpha == ALPHA_INIT_VAL] = -10
         alpha = self.alpha_activate(alpha).reshape(1, 1, *self.atlas.shape[-2:])  # (1, 1, H, W)
         for i in range(3):
+            alpha = erode(alpha)
+        for i in range(5):
             alpha = dilate(alpha)
 
         # sample to batches

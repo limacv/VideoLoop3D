@@ -148,6 +148,8 @@ def config_parser():
                         help='depth smooth loss')
     parser.add_argument("--laplacian_loss_weight", type=float, default=0,
                         help='as rigid as possible smooth loss')
+    parser.add_argument("--density_loss_weight", type=float, default=0,
+                        help='density loss')
 
     # training options
     parser.add_argument("--N_iters", type=int, default=30)
