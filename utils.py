@@ -9,6 +9,7 @@ from torchvision.transforms import GaussianBlur
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer import rasterize_meshes
 from pytorch3d.renderer.mesh.rasterizer import Fragments
+import cv2
 
 
 img2mse = lambda x, y: torch.mean((x - y) ** 2)
@@ -60,6 +61,22 @@ class SimpleRasterizer(nn.Module):
             cull_to_frustum=raster_settings.cull_to_frustum,
         )
         return Fragments(*fragment)  # pix_to_face, zbuf, bary_coords, dists
+
+
+def frag2uv(frag: Fragments, uvs, uvfaces):
+    """
+    return MPI mask, uv coordinate
+    """
+    pixel_to_face, depths, bary_coords = frag.pix_to_face, frag.zbuf, frag.bary_coords
+    # currently the batching is not supported
+    mask = pixel_to_face.reshape(-1) >= 0
+    mask_flat = mask.reshape(-1)
+    faces_ma_dyn = pixel_to_face.reshape(-1)[mask_flat]
+    uv_indices = uvfaces[faces_ma_dyn]
+    uvs = uvs[uv_indices]  # N, 3, n_feat
+    bary_coords_ma = bary_coords.reshape(-1, 3)[mask_flat, :]  # N, 3
+    uvs = (bary_coords_ma[..., None] * uvs).sum(dim=-2)
+    return mask, uvs
 
 
 class ParamsWithGradGain(nn.Module):
@@ -300,3 +317,28 @@ class DataParallelCPU:
 
     def __call__(self, *args, **kwargs):
         return self.module(*args, **kwargs)
+
+
+def compute_loopable_mask(vid, eps=10 / 255):
+    rises = np.zeros_like(vid[0]) > 0
+    falls = np.zeros_like(vid[0]) > 0
+    minval = vid[0]
+    maxval = vid[0]
+    for im in vid[1:]:
+        minval = np.minimum(minval, im)
+        maxval = np.maximum(maxval, im)
+        rises = np.logical_or(im - minval > eps, rises)
+        falls = np.logical_or(maxval - im > eps, falls)
+
+    unchangging = np.logical_and(np.logical_not(rises), np.logical_not(falls))
+    unchangging = np.all(unchangging, axis=-1)
+    unloopable = np.logical_xor(rises, falls)
+    unloopable = np.any(unloopable, axis=-1)
+    loopable = np.logical_not(np.logical_or(unchangging, unloopable))
+
+    loopable = cv2.erode(loopable.astype(np.uint8), np.ones((3, 3)))
+    loopable = cv2.dilate(loopable.astype(np.uint8), np.ones((3, 3)))
+    label = np.stack([loopable, unloopable.astype(np.uint8), unchangging.astype(np.uint8)], axis=-1) * 255
+    label_smooth = cv2.GaussianBlur(label, (5, 5), 0)
+    loopable_smooth = label_smooth.argmax(axis=-1) == 0
+    return loopable_smooth

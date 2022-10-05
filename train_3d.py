@@ -45,6 +45,7 @@ class MVPatchDataset(Dataset):
         self.dynmask = []
         # for debug only
         # self.images = [torch.rand(3, self.h, self.w)] * self.v
+        # self.dynmask = [torch.rand(self.h, self.w)] * self.v
         # return
         for video in videos:
             vid = np.array([cv2.resize(img, (self.w, self.h)) for img in video]) / 255
@@ -76,9 +77,10 @@ class MVPatchDataset(Dataset):
                 raise RuntimeError(f"Unrecognized vid2img_mode={self.mode}")
 
             img = torch.tensor(img).permute(2, 0, 1)
-            dyn_mask = torch.tensor(np.std(vid, axis=0).sum(axis=-1))
+            loopmask = compute_loopable_mask(vid)
+            loopmask = torch.tensor(loopmask).type_as(img)
             self.images.append(img)
-            self.dynmask.append(dyn_mask)
+            self.dynmask.append(loopmask)
         print(f"Dataset: generate {len(self)} patches for training, pad {pad_info} to videos")
 
     def __len__(self):
@@ -90,8 +92,8 @@ class MVPatchDataset(Dataset):
         pose = self.poses[view_idx]
         intrin = get_new_intrin(self.intrins[view_idx], h_start, w_start).float()
         crops = self.images[view_idx][..., h_start: h_start + self.patch_h_size, w_start: w_start + self.patch_w_size]
-
-        return w_start, h_start, pose, intrin, crops.cuda()
+        crops_ma = self.dynmask[view_idx][h_start: h_start + self.patch_h_size, w_start: w_start + self.patch_w_size]
+        return w_start, h_start, pose, intrin, crops.cuda(), crops_ma.cuda()
 
 
 def train():
@@ -179,12 +181,18 @@ def train():
 
     # begin of run one iteration (one patch)
     def run_iter(stepi, optimizer_, datainfo_):
-        h_starts, w_starts, b_pose, b_intrin, b_rgbs = datainfo_
+        h_starts, w_starts, b_pose, b_intrin, b_rgbs, b_loopmask = datainfo_
         b_extrin = pose2extrin_torch(b_pose)
         patch_h, patch_w = b_rgbs.shape[-2:]
 
         nerf.train()
         rgb, extra = nerf(patch_h, patch_w, b_extrin, b_intrin)
+        if args.learn_loop_mask:
+            loop_mask = rgb[:, -1]
+            loop_loss = img2mse(loop_mask, b_loopmask)
+            rgb = rgb[:, :3]
+        else:
+            loop_loss = 0
 
         # RGB loss
         img_loss = img2mse(rgb, b_rgbs)
@@ -197,7 +205,7 @@ def train():
             if args_var[f"{k}_loss_weight"] > 0:
                 extra_losses[k] = extra[k].mean() * args_var[f"{k}_loss_weight"]
 
-        loss = img_loss
+        loss = img_loss + loop_loss
         for v in extra_losses.values():
             loss = loss + v
 
@@ -231,10 +239,13 @@ def train():
                              (args.patch_h_stride, args.patch_w_stride),
                              poses, intrins, args.vid2img_mode)
     # visualize the image, delete afterwards
-    for viewi, img in enumerate(dataset.images):
+    for viewi, (img, loopma) in enumerate(zip(dataset.images, dataset.dynmask)):
         p = os.path.join(expdir, args.expname, f"imgvis_{args.vid2img_mode}", f"{viewi:04d}.png")
         os.makedirs(os.path.dirname(p), exist_ok=True)
         imageio.imwrite(p, to8b(img.permute(1, 2, 0).cpu().numpy()))
+        pm = os.path.join(expdir, args.expname, f"loopvis", f"{viewi:04d}.png")
+        os.makedirs(os.path.dirname(pm), exist_ok=True)
+        imageio.imwrite(pm, to8b(loopma.cpu().numpy()))
     dataloader = DataLoader(dataset, 1, shuffle=True)
 
     iter_total_step = 0
@@ -287,21 +298,36 @@ def train():
                 prefix = os.path.join(expdir, args.expname, f"texture_epoch_{epoch_i:04d}")
                 nerf.module.save_texture(prefix)
 
+            if args.learn_loop_mask and hasattr(nerf.module, "save_loopmask"):
+                prefix = os.path.join(expdir, args.expname, f"loopable_epoch_{epoch_i:04d}")
+                nerf.module.save_loopmask(prefix)
+
             print('render poses shape', render_extrins.shape, render_intrins.shape)
             with torch.no_grad():
                 nerf.eval()
 
                 rgbs = []
+                loopmasks = []
                 for ri in range(len(render_extrins)):
                     r_pose = render_extrins[ri:ri + 1]
                     r_intrin = render_intrins[ri:ri + 1]
 
-                    rgb, extra = nerf(H, W, r_pose, r_intrin)
+                    rgbl, extra = nerf(H, W, r_pose, r_intrin)
+                    if args.learn_loop_mask:
+                        rgb, loopmask = rgbl[:, :3], rgbl[:, -1]
+                        loopmask = loopmask[0].cpu().numpy()
+                        loopmask = np.stack([np.zeros_like(loopmask), loopmask, np.zeros_like(loopmask)], -1)
+                        loopmasks.append(loopmask)
+                    else:
+                        rgb = rgbl
                     rgb = rgb[0].permute(1, 2, 0).cpu().numpy()
                     rgbs.append(rgb)
 
                 rgbs = np.array(rgbs)
                 imageio.mimwrite(moviebase + '_rgb.mp4', to8b(rgbs), fps=30, quality=8)
+                if len(loopmasks) > 0:
+                    loopmasks = np.array(loopmasks)
+                    imageio.mimwrite(moviebase + '_loopable.mp4', to8b(loopmasks), fps=30, quality=8)
 
 
 if __name__ == '__main__':

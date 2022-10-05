@@ -1,13 +1,13 @@
 {
 # --prefix /d1/scratch/PI/psander/data/VideoLoops
 CUDA_VISIBLE_DEVICES=9 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
-  --config configs/ustfallclose_mpmesh.txt &
+  --config configs/ustfallclose_mpmesh.txt
 
 #CUDA_VISIBLE_DEVICES=8 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
 #  --config configs/ustfallfar_mpmesh.txt &
 
 #CUDA_VISIBLE_DEVICES=7 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
-#  --config configs/ustfallclose_mpmesh.txt &
+#  --config configs/usttap_mpmesh.txt &
 
 #CUDA_VISIBLE_DEVICES=4 python train_3dvid.py --prefix /d1/scratch/PI/psander/data/VideoLoops --config configs/ustfallclose_mpv_gpnn.txt
 

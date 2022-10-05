@@ -1,6 +1,6 @@
 gpu_num = 1
 # Dataset related
-expname = usttap720p32layer_dyn_smth02_sparsity0004_density1
+expname = usttap720p32layer_dyn_smth02_sparsity0004_postdensity1
 datadir = data/usttap720p
 expdir  = meshlogs
 factor = 2
@@ -37,7 +37,6 @@ rgb_smooth_loss_weight = 0.2
 a_smooth_loss_weight = 0.2
 #d_smooth_loss_weight = 0.1
 laplacian_loss_weight = 0   # to be adjusted
-density_loss_weight = 1
 
 i_img = 50
 i_print = 10

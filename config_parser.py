@@ -92,6 +92,11 @@ def config_parser():
     # for mpi
     parser.add_argument("--sparsify_epoch", type=int, default=-1,
                         help='sparsify the MPMesh in epoch')
+    parser.add_argument("--sparsify_rmfirstlayer", action='store_true',
+                        help='if true, will remove the first layer')  # TODO: implement this
+    parser.add_argument("--learn_loop_mask", action='store_true',
+                        help='if true, will learn a loop_mask jointly')
+
     parser.add_argument("--direct2sh_epoch", type=int, default=-1,
                         help='converting direct to sh')
     parser.add_argument("--sparsify_alpha_thresh", type=float, default=0.03,
