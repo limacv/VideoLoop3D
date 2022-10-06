@@ -172,6 +172,36 @@ class MPMesh(nn.Module):
         #         ]).reshape(-1, 2).type_as(self.uvs)
         #         self.uvs *= uv_scaling
 
+    def init_from_mpi(self, state_dict):
+        self._verts.data = state_dict['_verts'].type_as(self._verts)
+        self.uvs.data = state_dict['uvs'].type_as(self.uvs)
+        self.atlas.data = state_dict['atlas'].type_as(self.atlas)
+        self.uvfaces.data = state_dict['uvfaces'].type_as(self.uvfaces)
+        self.faces.data = state_dict['faces'].type_as(self.faces)
+        self.ref_extrin.data = state_dict['ref_extrin'].type_as(self.ref_extrin)
+        self.ref_intrin.data = state_dict['ref_intrin'].type_as(self.ref_intrin)
+        self.planedepth.data = state_dict['planedepth'].type_as(self.planedepth)
+        self.is_sparse = state_dict["self.is_sparse"]
+        self.atlas_full_w = state_dict["self.atlas_full_w"]
+        self.atlas_full_h = state_dict["self.atlas_full_h"]
+        self.atlas_grid_h = state_dict["self.atlas_grid_h"]
+        self.atlas_grid_w = state_dict["self.atlas_grid_w"]
+
+        if "self.has_dyn" in state_dict.keys():
+            self.has_dyn = state_dict["self.has_dyn"]
+            self.atlas_full_dyn_w = state_dict["self.atlas_full_dyn_w"]
+            self.atlas_full_dyn_h = state_dict["self.atlas_full_dyn_h"]
+            self.atlas_grid_dyn_h = state_dict["self.atlas_grid_dyn_h"]
+            self.atlas_grid_dyn_w = state_dict["self.atlas_grid_dyn_w"]
+            uvs_dyn = state_dict['uvs_dyn'].type_as(self.uvs)
+            uvfaces_dyn = state_dict['uvfaces_dyn'].type_as(self.uvfaces)
+            faces_dyn = state_dict['faces_dyn'].type_as(self.faces)
+            atlas_dyn = state_dict['atlas_dyn'].type_as(self.atlas)
+            self.register_parameter("uvs_dyn", nn.Parameter(uvs_dyn, requires_grad=True))
+            self.register_buffer("uvfaces_dyn", uvfaces_dyn)
+            self.register_buffer("faces_dyn", faces_dyn)
+            self.register_parameter("atlas_dyn", nn.Parameter(atlas_dyn, requires_grad=True))
+
     def state_dict(self, destination=None, prefix='', keep_vars=False):
         state_dict = super().state_dict()
         state_dict["self.is_sparse"] = self.is_sparse
@@ -182,10 +212,10 @@ class MPMesh(nn.Module):
 
         if hasattr(self, "atlas_dyn"):
             state_dict["self.has_dyn"] = self.has_dyn
-            state_dict["self.atlas_full_w"] = self.atlas_full_dyn_w
-            state_dict["self.atlas_full_h"] = self.atlas_full_dyn_h
-            state_dict["self.atlas_grid_h"] = self.atlas_grid_dyn_h
-            state_dict["self.atlas_grid_w"] = self.atlas_grid_dyn_w
+            state_dict["self.atlas_full_dyn_w"] = self.atlas_full_dyn_w
+            state_dict["self.atlas_full_dyn_h"] = self.atlas_full_dyn_h
+            state_dict["self.atlas_grid_dyn_h"] = self.atlas_grid_dyn_h
+            state_dict["self.atlas_grid_dyn_w"] = self.atlas_grid_dyn_w
         return state_dict
 
     def save_mesh(self, prefix):
@@ -220,8 +250,8 @@ class MPMesh(nn.Module):
         if self.has_dyn:
             tex_dyn = self.atlas_dyn.detach()[0].permute(1, 2, 0)
             rgba = torch.cat([self.rgb_activate(tex_dyn[..., :-1]), self.alpha_activate(tex_dyn[..., -1:])], dim=-1)
-            tex_dyn = (rgba * 255).type(torch.uint8)
-            imageio.imwrite(prefix + "_dyn.png", texture)
+            tex_dyn = (rgba * 255).type(torch.uint8).cpu().numpy()
+            imageio.imwrite(prefix + "_dyn.png", tex_dyn)
 
     @torch.no_grad()
     def save_loopmask(self, prefix):
@@ -299,7 +329,7 @@ class MPMesh(nn.Module):
         if self.args.sparsify_rmfirstlayer:
             print("INFO::remove the first layer when sparsify")
             n_quad_perlayer = self.mpi_h_verts * self.mpi_w_verts
-            atlases_alpha[n_quad_perlayer] = 0
+            atlases_alpha[:n_quad_perlayer] = 0
         atlases_alpha = atlases_alpha.reshape(n_quad, -1)
         atlases_loop = torchf.grid_sample(loopmask.expand(n_quad, -1, -1, -1), grid, align_corners=True)
         atlases_loop = atlases_loop.permute(0, 2, 3, 1)
@@ -440,6 +470,7 @@ class MPMesh(nn.Module):
                 vert, faces
             )
             pixel_to_face, depths, bary_coords = frag.pix_to_face, frag.zbuf, frag.bary_coords
+            num_layers = pixel_to_face.shape[-1]
             # currently the batching is not supported
             mask = torch.logical_and(pixel_to_face >= 0, pixel_to_face < static_face_count)
             mask_dyn = pixel_to_face >= static_face_count
@@ -478,14 +509,14 @@ class MPMesh(nn.Module):
 
         rgba = render_masked_rgba(mask, self.atlas, uvs)
 
-        canvas = torch.zeros((B, H, W, self.mpi_d, 4)).type_as(rgba).reshape(-1, 4)
+        canvas = torch.zeros((B, H, W, num_layers, 4)).type_as(rgba).reshape(-1, 4)
         mpi = torch.masked_scatter(canvas, mask_flat[:, None].expand_as(canvas), rgba)
         if self.has_dyn:
             with torch.no_grad():
                 uvs_dyn = get_uvs(mask_dyn_flat, self.uvs_dyn, self.uvfaces_dyn, offset_=static_face_count)
             rgba_dyn = render_masked_rgba(mask_dyn, self.atlas_dyn, uvs_dyn)
             mpi = torch.masked_scatter(mpi, mask_dyn_flat[:, None].expand_as(canvas), rgba_dyn)
-        mpi = mpi.reshape(B, H, W, self.mpi_d, 4)
+        mpi = mpi.reshape(B, H, W, num_layers, 4)
         # make rgb d a plane
         rgbd, blend_weight = overcompose(
             mpi[..., -1],
@@ -498,9 +529,9 @@ class MPMesh(nn.Module):
                                        uvs[None, None, ...],
                                        padding_mode="zeros", align_corners=True)
             label = torch.sigmoid(label)
-            canvas = torch.zeros((B, H, W, self.mpi_d, 1)).type_as(rgba).reshape(-1, 1)
+            canvas = torch.zeros((B, H, W, num_layers, 1)).type_as(rgba).reshape(-1, 1)
             mpi_mask = torch.masked_scatter(canvas, mask_flat[:, None].expand_as(canvas), label)
-            mpi_mask = mpi_mask.reshape(B, H, W, self.mpi_d, 1)
+            mpi_mask = mpi_mask.reshape(B, H, W, num_layers, 1)
             label, _ = overcompose(
                 mpi[..., -1].detach(), mpi_mask  # detach mpi so that geometry is not related to mpi
             )

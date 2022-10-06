@@ -1,20 +1,22 @@
 gpu_num = 1
 # Dataset related
-expname = ustfallclose_v0268GpnnlmA0Gain2P5Pt3S2St1Fnmse_otherGpnnlmA100P3Pt3S2St1Fnmse
+expname = sparse_ustfallclose_f30_v028Gpnnlm0PtSt5321Fnmse_otherGpnnlm100PtSt3321Fnmse
 datadir = data/ustfallclose720p
 expdir  = logs
-#init_from = texture_epoch_0049.png
+init_from = meshlogs/ustfallclose720p32layer_dyn_smth02_sparsity0004_cullloop_rm1st/epoch_0120.tar
 factor = 2
 bd_factor = 0.85
 seed = 2
 model_type = MPMesh
+mpv_frm_num = 30
+mpv_isloop
 
-# mpi configuration
+# mpi configuration, not important since we load from ckpt
 mpi_h_scale = 1.1
 mpi_w_scale = 1.1
 mpi_h_verts = 27
 mpi_w_verts = 48
-mpi_d = 16
+mpi_d = 32
 atlas_grid_h = 4
 atlas_size_scale = 1
 
@@ -46,10 +48,8 @@ pyr_minimal_dim = 65
 pyr_num_epoch = 50
 pyr_factor = 0.75
 init_std = 0.02
-mpv_frm_num = 30
-mpv_isloop
 
-loss_ref_idx = 0,2,6,8
+loss_ref_idx = 0,2,8
 swd_macro_block = 65
 swd_loss_gain_ref = 2
 loss_name_ref = gpnn_lm

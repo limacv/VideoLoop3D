@@ -18,7 +18,7 @@ to8b = lambda x: (255 * np.clip(x, 0, 1)).astype(np.uint8)
 
 
 class SimpleRasterizer(nn.Module):
-    def __init__(self, raster_settings=None):
+    def __init__(self, raster_settings=None, adaptive_layernum=True):
         """
         max_faces_per_bin = int(max(10000, meshes._F / 5))
         """
@@ -26,6 +26,7 @@ class SimpleRasterizer(nn.Module):
         if raster_settings is None:
             raster_settings = RasterizationSettings()
         self.raster_settings = raster_settings
+        self.adaptive_layer_num = adaptive_layernum
 
     def forward(self, vertices, faces):
         """
@@ -60,6 +61,12 @@ class SimpleRasterizer(nn.Module):
             z_clip_value=z_clip,
             cull_to_frustum=raster_settings.cull_to_frustum,
         )
+        if self.adaptive_layer_num:
+            with torch.no_grad():
+                pix_to_face = fragment[0]
+                pix_to_face_max = pix_to_face.reshape(-1, pix_to_face.shape[-1]).max(dim=0)[0]
+                num_layer = torch.count_nonzero(pix_to_face_max > 0).item()
+            fragment = [frag[:, :, :, :num_layer] for frag in fragment]
         return Fragments(*fragment)  # pix_to_face, zbuf, bary_coords, dists
 
 

@@ -1,8 +1,10 @@
 gpu_num = 1
 # Dataset related
+prefix = D:\MSI_NB\source\data\VideoLoops
 expname = ustfallclose720p32layer_debug
 datadir = data/ustfallclose720p
 expdir  = meshlogs
+# init_from = meshlogs\ustfallclose720p32layer_dyn_smth02_sparsity0004_cullloop\epoch_0119.tar
 factor = 2
 bd_factor = 0.85
 seed = 2
@@ -20,7 +22,7 @@ atlas_grid_h = 4
 atlas_size_scale = 1
 
 # Training related
-sparsify_epoch = 0
+sparsify_epoch = 1
 sparsify_alpha_thresh = 0.05
 N_iters = 140
 patch_h_size = 180

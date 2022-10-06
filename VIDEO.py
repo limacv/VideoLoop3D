@@ -51,7 +51,7 @@ class SimpleVideo(nn.Module):
     def export_video(self, prefix):
         video = self.video[0].permute(1, 2, 3, 0)
         video = (video * 255).clamp(0, 255).type(torch.uint8).cpu().numpy()
-        imageio.mimwrite(f"{prefix}.mp4", video, fps=30)
+        imageio.mimwrite(f"{prefix}.mp4", video, fps=25)
 
     def forward(self, h, w, h_start: torch.Tensor=0, w_start=0, res=None):
         if isinstance(h_start, int):

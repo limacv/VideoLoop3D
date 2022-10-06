@@ -44,9 +44,9 @@ class MVPatchDataset(Dataset):
         self.images = []
         self.dynmask = []
         # for debug only
-        # self.images = [torch.rand(3, self.h, self.w)] * self.v
-        # self.dynmask = [torch.rand(self.h, self.w)] * self.v
-        # return
+        self.images = [torch.rand(3, self.h, self.w)] * self.v
+        self.dynmask = [torch.rand(self.h, self.w)] * self.v
+        return
         for video in videos:
             vid = np.array([cv2.resize(img, (self.w, self.h)) for img in video]) / 255
             # mid
@@ -171,13 +171,16 @@ def train():
     print('Found ckpts', ckpts)
 
     start = 0
-    if len(ckpts) > 0:
-        ckpt_path = ckpts[-1]
+    if len(args.init_from) > 0:
+        ckpt_path = os.path.join(args.prefix, args.init_from)
+        assert os.path.exists(ckpt_path), f"Trying to load from {ckpt_path} but it doesn't exist"
         print('Reloading from', ckpt_path)
         ckpt = torch.load(ckpt_path)
 
         start = ckpt['epoch_i']
-        nerf.module.load_state_dict(ckpt['network_state_dict'])
+        state_dict = ckpt['network_state_dict']
+        nerf.module.init_from_mpi(state_dict)
+        nerf.cuda()
 
     # begin of run one iteration (one patch)
     def run_iter(stepi, optimizer_, datainfo_):
@@ -324,10 +327,10 @@ def train():
                     rgbs.append(rgb)
 
                 rgbs = np.array(rgbs)
-                imageio.mimwrite(moviebase + '_rgb.mp4', to8b(rgbs), fps=30, quality=8)
+                imageio.mimwrite(moviebase + '_rgb.mp4', to8b(rgbs), fps=25, quality=8)
                 if len(loopmasks) > 0:
                     loopmasks = np.array(loopmasks)
-                    imageio.mimwrite(moviebase + '_loopable.mp4', to8b(loopmasks), fps=30, quality=8)
+                    imageio.mimwrite(moviebase + '_loopable.mp4', to8b(loopmasks), fps=25, quality=8)
 
 
 if __name__ == '__main__':

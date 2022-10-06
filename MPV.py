@@ -34,11 +34,15 @@ class MPMeshVid(nn.Module):
         self.mpi_d = args.mpi_d
         self.mpi_h_verts, self.mpi_w_verts = args.mpi_h_verts, args.mpi_w_verts
         self.H, self.W = H, W
-        self.atlas_grid_h, self.atlas_grid_w = args.atlas_grid_h, self.mpi_d // args.atlas_grid_h
-        assert self.mpi_d % self.atlas_grid_h == 0, "mpi_d and atlas_grid_h should match"
+
+        self.atlas_grid_dyn_h, self.atlas_grid_dyn_w = args.atlas_grid_h, self.mpi_d // args.atlas_grid_h
+        assert self.mpi_d % self.atlas_grid_dyn_h == 0, "mpi_d and atlas_grid_h should match"
         self.is_sparse = False  # initialize to MPI
-        self.atlas_full_h = int(self.atlas_grid_h * mpi_h)
-        self.atlas_full_w = int(self.atlas_grid_w * mpi_w)
+        self.has_dyn = False
+        self.atlas_full_dyn_h = int(self.atlas_grid_dyn_h * mpi_h)
+        self.atlas_full_dyn_w = int(self.atlas_grid_dyn_w * mpi_w)
+        self.atlas_grid_h, self.atlas_grid_w = self.atlas_grid_dyn_h, self.atlas_grid_dyn_w
+        self.atlas_full_h, self.atlas_full_w = self.atlas_full_dyn_h, self.atlas_full_dyn_w
 
         assert ref_extrin.shape == (4, 4) and ref_intrin.shape == (3, 3)
         self.register_buffer("ref_extrin", torch.tensor(ref_extrin))
@@ -69,17 +73,16 @@ class MPMeshVid(nn.Module):
         
         # generate uv coordinate
         # ########################
-        uvs_plane = torch.meshgrid([torch.arange(self.atlas_grid_h) / self.atlas_grid_h,
-                                    torch.arange(self.atlas_grid_w) / self.atlas_grid_w])
+        uvs_plane = torch.meshgrid([torch.arange(self.atlas_grid_dyn_h) / self.atlas_grid_dyn_h,
+                                    torch.arange(self.atlas_grid_dyn_w) / self.atlas_grid_dyn_w])
         uvs_plane = torch.stack(uvs_plane[::-1], dim=-1) * 2 - 1
         uvs_voxel_size = (- uvs_plane[-1, -1] + 1).reshape(1, 1, 2)
         uvs_voxel = torch.meshgrid([torch.linspace(0, 1, args.mpi_h_verts), torch.linspace(0, 1, args.mpi_w_verts)])
         uvs_voxel = torch.stack(uvs_voxel[::-1], dim=-1).reshape(1, -1, 2) * uvs_voxel_size
         uvs = (uvs_plane.reshape(-1, 1, 2) + uvs_voxel.reshape(1, -1, 2)).reshape(-1, 2)
 
-        scaling = 1
-        atlas = torch.rand((1, args.atlas_cnl, int(self.atlas_full_h * scaling), int(self.atlas_full_w * scaling)))
-        atlas_dyn = torch.randn((self.frm_num, 4, int(self.atlas_full_h * scaling), int(self.atlas_full_w * scaling))) \
+        atlas = torch.rand((1, args.atlas_cnl, int(self.atlas_full_h), int(self.atlas_full_w)))
+        atlas_dyn = torch.randn((self.frm_num, 4, int(self.atlas_full_dyn_h), int(self.atlas_full_dyn_w))) \
                     * args.init_std
         if args.fp16:
             atlas = atlas.half()
@@ -90,10 +93,13 @@ class MPMeshVid(nn.Module):
         # atlas_size = torch.tensor([int(self.atlas_full_w * scaling), int(self.atlas_full_h * scaling)]).reshape(-1, 2)
         # uvs *= (atlas_size - 1).type_as(uvs)
 
-        self.register_parameter("uvs", nn.Parameter(uvs, requires_grad=True))
-        self.register_buffer("uvfaces", faces.clone().long())
+        self.register_parameter("uvs", nn.Parameter(uvs[:0].clone(), requires_grad=True))
+        self.register_parameter("uvs_dyn", nn.Parameter(uvs, requires_grad=True))
+        self.register_buffer("uvfaces", faces[:0].clone().long())
+        self.register_buffer("uvfaces_dyn", faces.clone().long())
         self._verts = nn.Parameter(verts, requires_grad=True)
-        self.register_buffer("faces", faces.long())
+        self.register_buffer("faces", faces[:0].long())
+        self.register_buffer("faces_dyn", faces.long())
         self.optimize_geometry = False
         self.register_parameter("atlas_dyn", nn.Parameter(atlas_dyn, requires_grad=True))
         self.register_parameter("atlas", nn.Parameter(atlas, requires_grad=True))
@@ -151,10 +157,10 @@ class MPMeshVid(nn.Module):
 
     def lod(self, factor):
         if not self.is_sparse:
-            h, w = int(self.atlas_full_h * factor), int(self.atlas_full_w * factor)
-            print(f"MPV.lod:: Resizing the atlas from {self.atlas.shape[-2:]} to {(h, w)}")
-            new_atlas = torchvision.transforms.Resize((h, w))(self.atlas.data)
-            new_atlas_dyn = torchvision.transforms.Resize((h, w))(self.atlas_dyn.data)
+            h, w = int(self.atlas_full_dyn_h * factor), int(self.atlas_full_dyn_w * factor)
+            print(f"MPV.lod:: Resizing the atlas from {self.atlas_dyn.shape[-2:]} to {(h, w)}")
+            new_atlas = torchvision.transforms.Resize((h, w))(self.atlas_dyn.data)
+            self.atlas_dyn.data = new_atlas
         else:
             atlas_h, atlas_w = self.atlas.shape[-2:]
             gridh, gridw = self.atlas_grid_h, self.atlas_grid_w
@@ -166,43 +172,47 @@ class MPMeshVid(nn.Module):
                 return
             print(f"MPV.lod:: Sparse! Resizing the tiles from {(tileh, tilew)} to {(newtileh, newtilew)}")
 
-            def resize_atlas(a_):
+            def resize_atlas(a_, gh_, gw_):
                 b, c = a_.shape[:2]
-                a_ = a_.reshape(b, c, gridh, tileh, gridw, tilew)
+                a_ = a_.reshape(b, c, gh_, tileh, gw_, tilew)
                 a_ = a_.permute(0, 2, 4, 1, 3, 5)  # b, gh, gw, c, th, tw
                 a_ = torchvision.transforms.Resize((newtileh, newtilew))(a_.reshape(-1, c, tileh, tilew))
-                a_ = a_.reshape(b, gridh, gridw, c, newtileh, newtilew).permute(0, 3, 1, 4, 2, 5)
-                return a_.reshape(b, c, gridh * newtileh, gridw * newtilew)
+                a_ = a_.reshape(b, gh_, gw_, c, newtileh, newtilew).permute(0, 3, 1, 4, 2, 5)
+                return a_.reshape(b, c, gh_ * newtileh, gw_ * newtilew)
 
-            new_atlas = resize_atlas(self.atlas.data)
-            new_atlas_dyn = resize_atlas(self.atlas_dyn.data)
+            new_atlas = resize_atlas(self.atlas.data, gridh, gridw)
+            self.register_parameter("atlas", nn.Parameter(new_atlas, requires_grad=True))
 
             # need to recompute the uv to prevent the anti-aliasing effect
-            new_atlas_h, new_atlas_w = new_atlas.shape[-2:]
-            uvs = self.uvs.data.detach()
-            pixel_idx_x = (uvs[:, 0] + 1) / 2 * (atlas_w - 1)
-            pixel_idx_x = torch.round(pixel_idx_x).type(torch.int64)
-            tile_idx_x = pixel_idx_x // tilew
-            tile_pixel_x = pixel_idx_x % tilew
-            assert torch.all(torch.logical_or(tile_pixel_x == 0, tile_pixel_x == (tilew - 1)))
-            tile_pixel_x[tile_pixel_x == (tilew - 1)] = newtilew - 1
-            new_pixel_idx_x = tile_idx_x * newtilew + tile_pixel_x
-            new_uvs_x = new_pixel_idx_x / (new_atlas_w - 1) * 2 - 1
+            def align_uv(uvs, old_atlas_h, old_atlas_w, new_atlas_h, new_atlas_w):
+                pixel_idx_x = (uvs[:, 0] + 1) / 2 * (old_atlas_w - 1)
+                pixel_idx_x = torch.round(pixel_idx_x).type(torch.int64)
+                tile_idx_x = pixel_idx_x // tilew
+                tile_pixel_x = pixel_idx_x % tilew
+                assert torch.all(torch.logical_or(tile_pixel_x == 0, tile_pixel_x == (tilew - 1)))
+                tile_pixel_x[tile_pixel_x == (tilew - 1)] = newtilew - 1
+                new_pixel_idx_x = tile_idx_x * newtilew + tile_pixel_x
+                new_uvs_x = new_pixel_idx_x / (new_atlas_w - 1) * 2 - 1
 
-            pixel_idx_y = (uvs[:, 1] + 1) / 2 * (atlas_h - 1)
-            pixel_idx_y = torch.round(pixel_idx_y).type(torch.int64)
-            tile_idx_y = pixel_idx_y // tileh
-            tile_pixel_y = pixel_idx_y % tileh
-            assert torch.all(torch.logical_or(tile_pixel_y == 0, tile_pixel_y == (tileh - 1)))
-            tile_pixel_y[tile_pixel_y == (tileh - 1)] = newtileh - 1
-            new_pixel_idx_y = tile_idx_y * newtileh + tile_pixel_y
-            new_uvs_y = new_pixel_idx_y / (new_atlas_h - 1) * 2 - 1
+                pixel_idx_y = (uvs[:, 1] + 1) / 2 * (old_atlas_h - 1)
+                pixel_idx_y = torch.round(pixel_idx_y).type(torch.int64)
+                tile_idx_y = pixel_idx_y // tileh
+                tile_pixel_y = pixel_idx_y % tileh
+                assert torch.all(torch.logical_or(tile_pixel_y == 0, tile_pixel_y == (tileh - 1)))
+                tile_pixel_y[tile_pixel_y == (tileh - 1)] = newtileh - 1
+                new_pixel_idx_y = tile_idx_y * newtileh + tile_pixel_y
+                new_uvs_y = new_pixel_idx_y / (new_atlas_h - 1) * 2 - 1
+                return torch.stack([new_uvs_x, new_uvs_y], dim=1)
 
-            self.uvs.data[:, 0] = new_uvs_x
-            self.uvs.data[:, 1] = new_uvs_y
+            self.uvs.data = align_uv(self.uvs.data.detach(), atlas_h, atlas_w, *self.atlas.shape[-2:])
 
-        self.register_parameter("atlas", nn.Parameter(new_atlas, requires_grad=True))
-        self.register_parameter("atlas_dyn", nn.Parameter(new_atlas_dyn, requires_grad=True))
+            if self.has_dyn:
+                atlas_dyn_h, atlas_dyn_w = self.atlas_dyn.shape[-2:]
+                new_atlas_dyn = resize_atlas(self.atlas_dyn.data, self.atlas_grid_dyn_h, self.atlas_grid_dyn_w)
+                self.register_parameter("atlas_dyn", nn.Parameter(new_atlas_dyn, requires_grad=True))
+                self.uvs_dyn.data = align_uv(self.uvs_dyn.data.detach(),
+                                             atlas_dyn_h, atlas_dyn_w, *self.atlas_dyn.shape[-2:])
+
         print("MPV.los:: Resizing successful !")
 
     def get_optimizer(self, step):
@@ -255,11 +265,18 @@ class MPMeshVid(nn.Module):
         self.atlas_grid_h = state_dict["self.atlas_grid_h"]
         self.atlas_grid_w = state_dict["self.atlas_grid_w"]
 
-        if 'atlas_dyn' in state_dict.keys():
-            atlas_dyn = state_dict['atlas_dyn']
-        else:
-            atlas_dyn = torch.randn((self.frm_num, 4, self.atlas_full_h, self.atlas_full_w)) * self.args.init_std
-        self.atlas_dyn.data = atlas_dyn.type_as(self.atlas)
+        if "self.has_dyn" in state_dict.keys():
+            self.has_dyn = state_dict["self.has_dyn"]
+            self.atlas_full_dyn_w = state_dict["self.atlas_full_dyn_w"]
+            self.atlas_full_dyn_h = state_dict["self.atlas_full_dyn_h"]
+            self.atlas_grid_dyn_h = state_dict["self.atlas_grid_dyn_h"]
+            self.atlas_grid_dyn_w = state_dict["self.atlas_grid_dyn_w"]
+            self.uvs_dyn.data = state_dict['uvs_dyn'].type_as(self.uvs)
+            self.uvfaces_dyn.data = state_dict['uvfaces_dyn'].type_as(self.uvfaces)
+            self.faces_dyn.data = state_dict['faces_dyn'].type_as(self.faces)
+            atlas_dyn = state_dict['atlas_dyn'].type_as(self.atlas)
+            atlas_dyn = atlas_dyn.expand(len(self.atlas_dyn), -1, -1, -1)
+            self.atlas_dyn.data = atlas_dyn
 
     def state_dict(self, destination=None, prefix='', keep_vars=False):
         state_dict = super().state_dict()
@@ -268,37 +285,47 @@ class MPMeshVid(nn.Module):
         state_dict["self.atlas_full_h"] = self.atlas_full_h
         state_dict["self.atlas_grid_h"] = self.atlas_grid_h
         state_dict["self.atlas_grid_w"] = self.atlas_grid_w
+
+        if hasattr(self, "atlas_dyn"):
+            state_dict["self.has_dyn"] = self.has_dyn
+            state_dict["self.atlas_full_dyn_w"] = self.atlas_full_dyn_w
+            state_dict["self.atlas_full_dyn_h"] = self.atlas_full_dyn_h
+            state_dict["self.atlas_grid_dyn_h"] = self.atlas_grid_dyn_h
+            state_dict["self.atlas_grid_dyn_w"] = self.atlas_grid_dyn_w
         return state_dict
 
     def save_mesh(self, prefix):
         vertices, faces, uvs = self.verts.detach(), self.faces.detach(), self.uvs.detach()
-        # uv_scaling = torch.tensor([
-        #     1 / (self.atlas.shape[-1] - 1),
-        #     1 / (self.atlas.shape[-2] - 1)
-        # ]).type_as(uvs)
-        # color = torch.cat([1 - uvs * uv_scaling, torch.zeros_like(uvs[:, :1])], dim=-1)
-        color = torch.cat([0.5 - uvs * 0.5, torch.zeros_like(uvs[:, :1])], dim=-1)
-        color = np.clip(color.cpu().numpy() * 255, 0, 255).astype(np.uint8)
-        mesh1 = trimesh.Trimesh(vertices.cpu().numpy(), faces.cpu().numpy(),
-                                vertex_colors=color, process=False)
-        txt = mesh1.export(prefix + ".obj", "obj")
-        with open(prefix + ".obj", 'w') as f:
-            f.write(txt)
+        if len(faces) > 0:
+            mesh1 = trimesh.Trimesh(vertices.cpu().numpy(), faces.cpu().numpy())
+            txt = mesh1.export(prefix + ".obj", "obj")
+            with open(prefix + ".obj", 'w') as f:
+                f.write(txt)
+
+        vertices, faces, uvs = self.verts.detach(), self.faces_dyn.detach(), self.uvs_dyn.detach()
+        if len(faces) > 0:
+            mesh1 = trimesh.Trimesh(vertices.cpu().numpy(), faces.cpu().numpy())
+            txt = mesh1.export(prefix + "_dyn.obj", "obj")
+            with open(prefix + "_dyn.obj", 'w') as f:
+                f.write(txt)
 
     @torch.no_grad()
     def save_texture(self, prefix):
-        atlas_h, atlas_w = self.atlas.shape[-2:]
-        texture = self.atlas.detach()[0].permute(1, 2, 0).reshape(-1, self.args.atlas_cnl)
-        ray_dir = torch.tensor([[0, 0, 1.]]).type_as(texture).expand(len(texture), -1)
-        ray_dir = self.view_embed_fn(ray_dir)
-        tex_input = torch.cat([texture, ray_dir], dim=-1)
-        chunksz = self.args.chunk
-        rgba = torch.cat([self.feat2rgba(tex_input[batchi: batchi + chunksz])
-                          for batchi in range(0, len(tex_input), chunksz)])
-        rgba = torch.cat([self.rgb_activate(rgba[..., :-1]), self.alpha_activate(rgba[..., -1:])], dim=-1)
-        texture = (rgba * 255).type(torch.uint8).reshape(atlas_h, atlas_w, 4).cpu().numpy()
         import imageio
-        imageio.imwrite(prefix + ".png", texture)
+        if len(self.faces) > 0:
+            texture_static = self.atlas.detach()[0].permute(1, 2, 0)
+            rgba = torch.cat([self.rgb_activate(texture_static[..., :-1]),
+                              self.alpha_activate(texture_static[..., -1:])], dim=-1)
+            texture = (rgba * 255).type(torch.uint8).cpu().numpy()
+            imageio.imwrite(prefix + "_static.png", texture)
+
+        if len(self.faces_dyn) > 0:
+            textures = self.atlas_dyn.detach().permute(0, 2, 3, 1)
+            rgb = self.rgb_activate(textures[..., :-1])
+            alpha = self.alpha_activate(textures[..., -1:])
+            rgb = rgb * alpha
+            textures = (rgb * 255).type(torch.uint8).cpu().numpy()
+            imageio.mimwrite(prefix + "_dyn.mov", textures, fps=25, quality=8)
 
     @property
     def verts(self):
@@ -309,9 +336,9 @@ class MPMeshVid(nn.Module):
         return verts
 
     def render(self, H, W, extrin, intrin, ts):
-        F = len(ts)
-        verts, faces = self.verts.reshape(1, -1, 3), self.faces.reshape(1, -1, 3)
-        with torch.set_grad_enabled(self.optimize_geometry):
+        framenum = len(ts)
+        verts = self.verts.reshape(1, -1, 3)
+        with torch.no_grad():
             R, T = extrin[:, :3, :3], extrin[:, :3, 3]
             # normalize intrin to ndc
             intrin_ptc = intrin.clone()
@@ -337,59 +364,69 @@ class MPMeshVid(nn.Module):
                 faces_per_pixel=self.mpi_d,
             )
             raster = SimpleRasterizer(raster_settings)
+            static_face_count = len(self.faces)
+            faces = torch.cat([self.faces, self.faces_dyn]).reshape(1, -1, 3)
             frag: Fragments = raster(
                 vert, faces
             )
             pixel_to_face, depths, bary_coords = frag.pix_to_face, frag.zbuf, frag.bary_coords
-
+            num_layers = pixel_to_face.shape[-1]
             # currently the batching is not supported
-            mask = pixel_to_face.reshape(-1) >= 0
-            faces_ma = pixel_to_face.reshape(-1)[mask]
-            uv_indices = self.uvfaces[faces_ma]
-            uvs = self.uvs[uv_indices]  # N, 3, n_feat
-            bary_coords_ma = bary_coords.reshape(-1, 3)[mask, :]  # N, 3
-            uvs = (bary_coords_ma[..., None] * uvs).sum(dim=-2)
+            mask = torch.logical_and(pixel_to_face >= 0, pixel_to_face < static_face_count)
+            mask_dyn = pixel_to_face >= static_face_count
+            mask_flat = mask.reshape(-1)
+            mask_dyn_flat = mask_dyn.reshape(-1)
 
+            def get_uvs(mask_flat_, uvs_, uvfaces_, offset_=0):
+                faces_ma_ = pixel_to_face.reshape(-1)[mask_flat_] - offset_
+                uv_indices = uvfaces_[faces_ma_]
+                uvs = uvs_[uv_indices]  # N, 3, n_feat
+                bary_coords_ma = bary_coords.reshape(-1, 3)[mask_flat_, :]  # N, 3
+                uvs = (bary_coords_ma[..., None] * uvs).sum(dim=-2)
+                return uvs
+
+            uvs = get_uvs(mask_flat, self.uvs, self.uvfaces)
             uvs = uvs.type_as(self.atlas)
+            uvs_dyn = get_uvs(mask_dyn_flat, self.uvs_dyn, self.uvfaces_dyn, static_face_count)
+            uvs_dyn = uvs_dyn.type_as(self.atlas_dyn)
 
-        _, ray_direction = get_rays_tensor_batches(H, W, intrin, pose2extrin_torch(extrin))
-        ray_direction = ray_direction / ray_direction.norm(dim=-1, keepdim=True)
-        ray_direction = ray_direction[..., None, :].expand(pixel_to_face.shape + (3,))
-        ray_d = ray_direction.reshape(-1, 3)[mask, :]
-        ray_d = self.view_embed_fn(ray_d.reshape(-1, 3)).type_as(self.atlas)
+        # _, ray_direction = get_rays_tensor_batches(H, W, intrin, pose2extrin_torch(extrin))
+        # ray_direction = ray_direction / ray_direction.norm(dim=-1, keepdim=True)
+        # ray_direction = ray_direction[..., None, :].expand(pixel_to_face.shape + (3,))
+        # ray_d = ray_direction.reshape(-1, 3)[mask, :]
+        # ray_d = self.view_embed_fn(ray_d.reshape(-1, 3)).type_as(self.atlas)
 
-        # uv from 0, S - 1  to -1, 1
-        # uv_scaling = torch.tensor([
-        #     2 / (self.atlas.shape[-1] - 1),
-        #     2 / (self.atlas.shape[-2] - 1)
-        # ], device=uvs.device)
-        # uvs = uvs * uv_scaling - 1
+        def render_masked_rgba(mask_, atlas_, uvs_):
+            # mask_flat_ = mask_.reshape(-1)
+            # ray_direction_ = ray_direction[..., None, :].expand(mask_.shape + (3,))
+            # ray_d_ = ray_direction_.reshape(-1, 3)[mask_flat_, :]
+            # ray_d_ = self.view_embed_fn(ray_d_.reshape(-1, 3))
+            batch_size_, cnl_ = atlas_.shape[:2]
+            rgba_feat_ = torchf.grid_sample(atlas_,
+                                            uvs_[None, None, ...].expand(batch_size_, 1, -1, 2),
+                                            padding_mode="zeros", align_corners=True)
+            rgba_feat_ = rgba_feat_.reshape(batch_size_, cnl_, -1).permute(0, 2, 1)
 
-        HxWxD = len(uvs)
-        # dynamic part
-        rgba_dyn = torchf.grid_sample(self.atlas_dyn[ts],
-                                           uvs[None, None, ...].expand(F, 1, HxWxD, 2),
-                                           padding_mode="zeros", align_corners=True)
-        rgba_dyn = rgba_dyn.reshape(F, 4, -1).permute(0, 2, 1)
+            # chunksz = self.args.chunk
+            # tex_input_ = torch.cat([rgba_feat_, ray_d_], dim=-1)
+            # rgba_ = torch.cat([self.feat2rgba(tex_input_[batchi: batchi + chunksz])
+            #                    for batchi in range(0, len(tex_input_), chunksz)])
+            rgba_ = self.feat2rgba(rgba_feat_.reshape(-1, cnl_)).reshape(batch_size_, -1, cnl_)
+            rgba_ = torch.cat([self.rgb_activate(rgba_[..., :-1]), self.alpha_activate(rgba_[..., -1:])], dim=-1)
+            return rgba_
 
-        # static part
-        rgba_feat = torchf.grid_sample(self.atlas,
-                                       uvs[None, None, ...],
-                                       padding_mode="zeros", align_corners=True)
-        rgba_feat = rgba_feat.reshape(1, self.atlas.shape[1], -1).permute(0, 2, 1)
-        chunksz = self.args.chunk
-        tex_input = torch.cat([rgba_feat, ray_d[None]], dim=-1).reshape(HxWxD, -1)
-        rgba = torch.cat([self.feat2rgba(tex_input[batchi: batchi + chunksz])
-                          for batchi in range(0, len(tex_input), chunksz)])
-        rgba = rgba[None]
+        rgba_static = render_masked_rgba(mask, self.atlas, uvs)
+        rgba_dyn = render_masked_rgba(mask_dyn, self.atlas_dyn[ts], uvs_dyn)
 
-        # fuse
-        rgba = torch.cat([self.rgb_activate(rgba[..., :-1] + rgba_dyn[..., :-1]),
-                          self.alpha_activate(rgba[..., -1:] + rgba_dyn[..., -1:])], dim=-1).reshape(F, HxWxD, 4)
-        canvas = torch.zeros((F, H, W, self.mpi_d, 4)).type_as(rgba).reshape(F, -1, 4)
-        mask_expand = mask[None, :, None].expand_as(canvas)
-        mpi = torch.masked_scatter(canvas, mask_expand.expand_as(canvas), rgba)
-        mpi = mpi.reshape(F, H, W, self.mpi_d, 4)
+        canvas = torch.zeros((1, H, W, num_layers, 4)).type_as(rgba_static).reshape(1, -1, 4)
+        mask_expand = mask_flat[None, :, None]
+        mpi_static = torch.masked_scatter(canvas, mask_expand, rgba_static)
+
+        mpi = mpi_static.expand(framenum, -1, 4)
+        mask_dyn_expand = mask_dyn_flat[None, :, None]
+        mpi = torch.masked_scatter(mpi, mask_dyn_expand, rgba_dyn)
+
+        mpi = mpi.reshape(framenum, H, W, num_layers, 4)
         # make rgb d a plane
         rgb, blend_weight = overcompose(
             mpi[..., -1],
