@@ -278,7 +278,7 @@ class MPMesh(nn.Module):
         self.use_viewdirs = True
 
     @torch.no_grad()
-    def sparsify_faces(self, alpha_thresh=0.03, loop_thresh=0.5):
+    def sparsify_faces(self, erode_num=2, alpha_thresh=0.03, loop_thresh=0.5):
         print("Sparsifying the faces")
         # faces of a quad: 0 - 1
         #                  | \ |
@@ -314,9 +314,12 @@ class MPMesh(nn.Module):
         loopmask[loopmask == ALPHA_INIT_VAL] = -10
         loopmask = torch.sigmoid(loopmask).reshape(1, 1, *self.atlas.shape[-2:])
 
-        for i in range(3):
+        loopmask = erode(loopmask)
+        loopmask = dilate(loopmask)
+
+        for i in range(erode_num):
             alpha = erode(alpha)
-        for i in range(5):
+        for i in range(erode_num + 2):
             alpha = dilate(alpha)
 
         # sample to batches
@@ -470,6 +473,7 @@ class MPMesh(nn.Module):
                 vert, faces
             )
             pixel_to_face, depths, bary_coords = frag.pix_to_face, frag.zbuf, frag.bary_coords
+            depths = torch.reciprocal(depths)
             num_layers = pixel_to_face.shape[-1]
             # currently the batching is not supported
             mask = torch.logical_and(pixel_to_face >= 0, pixel_to_face < static_face_count)
@@ -559,22 +563,24 @@ class MPMesh(nn.Module):
             if self.args.sparsity_loss_weight > 0:
                 alpha = variables["mpi"][..., -1]
                 sparsity = alpha.norm(dim=-1, p=1) / alpha.norm(dim=-1, p=2).clamp_min(1e-6)
-                sparsity = sparsity.mean() / np.sqrt(alpha.shape[-1])  # so it's inrrelvant to the layer num
+                sparsity = sparsity.mean() / np.sqrt(self.mpi_d)  # so it's inrrelvant to the layer num
                 extra["sparsity"] = sparsity.reshape(1, -1)
 
             if self.args.rgb_smooth_loss_weight > 0:
                 smooth = variables["mpi"][..., :-1]
+                denorm = smooth.shape[-2] / self.mpi_d
                 smoothx = (smooth[:, :, :-1] - smooth[:, :, 1:]).abs().mean()
                 smoothy = (smooth[:, :-1] - smooth[:, 1:]).abs().mean()
-                smooth = (smoothx + smoothy).reshape(1, -1)
+                smooth = (smoothx + smoothy).reshape(1, -1) * denorm
                 extra["rgb_smooth"] = smooth.reshape(1, -1)
 
             if self.args.a_smooth_loss_weight > 0:
                 smooth = variables["mpi"][..., -1]
+                denorm = smooth.shape[-1] / self.mpi_d
                 smoothx = (smooth[:, :, :-1] - smooth[:, :, 1:]).abs().mean()
                 smoothy = (smooth[:, :-1] - smooth[:, 1:]).abs().mean()
                 smooth = (smoothx + smoothy)
-                extra["a_smooth"] = smooth.reshape(1, -1)
+                extra["a_smooth"] = smooth.reshape(1, -1) * denorm
 
             if self.args.d_smooth_loss_weight > 0:
                 depth = variables['depth']

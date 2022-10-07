@@ -58,9 +58,9 @@ def config_parser():
                         help='produce looping videos')
     parser.add_argument("--swd_stridet_ref", type=int, default=2,
                         help='produce looping videos')
-    parser.add_argument("--swd_rou", type=float, default=0,
-                        help='parameter of robustness term')
-    parser.add_argument("--swd_rou_ref", type=float, default=0,
+    parser.add_argument("--swd_rou", type=str, default='0',
+                        help='parameter of robustness term, can also be mse, abs')
+    parser.add_argument("--swd_rou_ref", type=str, default='0',
                         help='parameter of robustness term')
     parser.add_argument("--swd_scaling", type=float, default=0.2,
                         help='parameter of robustness term')
@@ -93,7 +93,9 @@ def config_parser():
     parser.add_argument("--sparsify_epoch", type=int, default=-1,
                         help='sparsify the MPMesh in epoch')
     parser.add_argument("--sparsify_rmfirstlayer", action='store_true',
-                        help='if true, will remove the first layer')  # TODO: implement this
+                        help='if true, will remove the first layer')
+    parser.add_argument("--sparsify_erode", type=int, default=2,
+                        help='iters to dilate the alpha channel')
     parser.add_argument("--learn_loop_mask", action='store_true',
                         help='if true, will learn a loop_mask jointly')
 

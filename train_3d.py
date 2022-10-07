@@ -43,10 +43,10 @@ class MVPatchDataset(Dataset):
 
         self.images = []
         self.dynmask = []
-        # for debug only
-        self.images = [torch.rand(3, self.h, self.w)] * self.v
-        self.dynmask = [torch.rand(self.h, self.w)] * self.v
-        return
+        # TODO: for debug only, delete this
+        # self.images = [torch.rand(3, self.h, self.w)] * self.v
+        # self.dynmask = [torch.rand(self.h, self.w)] * self.v
+        # return
         for video in videos:
             vid = np.array([cv2.resize(img, (self.w, self.h)) for img in video]) / 255
             # mid
@@ -192,7 +192,14 @@ def train():
         rgb, extra = nerf(patch_h, patch_w, b_extrin, b_intrin)
         if args.learn_loop_mask:
             loop_mask = rgb[:, -1]
-            loop_loss = img2mse(loop_mask, b_loopmask)
+            # simple MSE
+            # loop_loss = img2mse(loop_mask, b_loopmask)
+
+            # entropy loss
+            loop_mask = torch.clamp(loop_mask, 0.001, 1 - 0.001)
+            entropy = b_loopmask * torch.log(loop_mask) + (1 - b_loopmask) * torch.log(1 - loop_mask)
+            loop_loss = - entropy.mean()
+
             rgb = rgb[:, :3]
         else:
             loop_loss = 0
@@ -259,7 +266,7 @@ def train():
 
         if epoch_i == args.sparsify_epoch:
             print("Sparsifying mesh models")
-            nerf.module.sparsify_faces(alpha_thresh=args.sparsify_alpha_thresh)
+            nerf.module.sparsify_faces(erode_num=args.sparsify_erode, alpha_thresh=args.sparsify_alpha_thresh)
             optimizer = nerf.module.get_optimizer()
 
         if epoch_i == args.direct2sh_epoch:

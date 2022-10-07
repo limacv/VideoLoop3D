@@ -471,26 +471,28 @@ class MPMeshVid(nn.Module):
             if self.args.sparsity_loss_weight > 0:
                 alpha = variables["mpi"][..., -1]
                 sparsity = alpha.norm(dim=-1, p=1) / alpha.norm(dim=-1, p=2).clamp_min(1e-4)
-                sparsity = sparsity.mean() * loss_gain
+                sparsity = sparsity.mean() / np.sqrt(self.mpi_d) * loss_gain
                 extra["sparsity"] = sparsity.reshape(1, -1)
 
             if self.args.rgb_smooth_loss_weight > 0:
                 smooth = variables["mpi"][..., :-1]
+                denorm = smooth.shape[-2] / self.mpi_d
                 smoothx = (smooth[:, :, :-1] - smooth[:, :, 1:]).abs().mean()
                 smoothy = (smooth[:, :-1] - smooth[:, 1:]).abs().mean()
-                smooth = (smoothx + smoothy).reshape(1, -1) * loss_gain
+                smooth = (smoothx + smoothy).reshape(1, -1) * (loss_gain * denorm)
                 extra["rgb_smooth"] = smooth.reshape(1, -1)
 
             if self.args.a_smooth_loss_weight > 0:
                 smooth = variables["mpi"][..., -1]
+                denorm = smooth.shape[-1] / self.mpi_d
                 smoothx = (smooth[:, :, :-1] - smooth[:, :, 1:]).abs().mean()
                 smoothy = (smooth[:, :-1] - smooth[:, 1:]).abs().mean()
-                smooth = (smoothx + smoothy) * loss_gain
+                smooth = (smoothx + smoothy) * (loss_gain * denorm)
                 extra["a_smooth"] = smooth.reshape(1, -1)
 
             if self.args.density_loss_weight > 0:
                 alpha = variables["alpha"]
-                density = ((alpha - 1) ** 2).mean() * loss_gain
+                density = (alpha - 1).abs().mean()
                 extra["density"] = density.reshape(1, -1)
 
             # if self.args.d_smooth_loss_weight > 0:

@@ -6,17 +6,23 @@ from pytorch_msssim import ssim
 import warnings
 
 
-def robust_lossfun(x, alpha, scale, epsilon=1e-6):
+def robust_lossfun(x, rou, scale, epsilon=1e-6):
+    if rou == 'mse':
+        return x ** 2
+    elif rou == 'abs':
+        return x.abs()
+
+    rou = float(rou)
     squared_scaled_x = (x / scale) ** 2
-    if alpha == 0:
+    if rou == 0:
         return torch.log1p(squared_scaled_x * 0.5)
-    elif alpha == 2:
+    elif rou == 2:
         return 0.5 * squared_scaled_x
     else:
-        b = abs(alpha - 2) + epsilon
-        d = alpha + epsilon if alpha >= 0 else alpha - epsilon
+        b = abs(rou - 2) + epsilon
+        d = rou + epsilon if rou >= 0 else rou - epsilon
         loss = (b / d) * (torch.pow(squared_scaled_x / b + 1., 0.5 * d) - 1.)
-        return loss
+        return loss * (scale * 10)
 
 
 def duplicate_to_match_lengths(arr1, arr2):

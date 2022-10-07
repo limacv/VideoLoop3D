@@ -1,14 +1,14 @@
 gpu_num = 1
 # Dataset related
-expname = sparse_ustfallclose_f60_v028Gpnnlm0PtSt5321Fnmse_otherGpnnlm100PtSt3321Fnmse_halfpatch
+expname = sparse_ustfallclose_f50_v02Gpnnlm0PtSt5321_otherGpnnlm100PtSt3321_roun2s005
 datadir = data/ustfallclose720p
 expdir  = logs
-init_from = meshlogs/ustfallclose720p32layer_dyn_smth02_sparsity0004_cullloop_rm1st/epoch_0120.tar
+init_from = meshlogs/ustfallclose720p32layer_dyn_smth02_sparsity0004_cullloopentropy_rm1st/epoch_0119.tar
 factor = 2
 bd_factor = 0.85
 seed = 2
 model_type = MPMesh
-mpv_frm_num = 60
+mpv_frm_num = 50
 mpv_isloop
 
 # mpi configuration, not important since we load from ckpt
@@ -21,10 +21,10 @@ atlas_grid_h = 4
 atlas_size_scale = 1
 
 # Training related
-patch_h_size = 90
-patch_h_stride = 45
-patch_w_size = 90
-patch_w_stride = 50
+patch_h_size = 180
+patch_h_stride = 90
+patch_w_size = 320
+patch_w_stride = 160
 lrate = 0.5
 lrate_decay = 100
 lrate_adaptive
@@ -49,9 +49,9 @@ pyr_num_epoch = 50
 pyr_factor = 0.75
 init_std = 0.02
 
-loss_ref_idx = 0,2,8
+loss_ref_idx = 0,2
 swd_macro_block = 65
-swd_loss_gain_ref = 2
+swd_loss_gain_ref = 3.5
 loss_name_ref = gpnn_lm
 swd_alpha_ref = 0
 swd_patch_size_ref = 5
@@ -59,8 +59,8 @@ swd_patcht_size_ref = 3
 swd_stride_ref = 2
 swd_stridet_ref = 1
 swd_dist_fn_ref = mse
-swd_rou_ref = 0
-swd_scaling_ref = 0.3
+swd_rou_ref = -2
+swd_scaling_ref = 0.05
 loss_name = gpnn_lm
 swd_alpha = 10000
 swd_patch_size = 3
@@ -68,5 +68,5 @@ swd_patcht_size = 3
 swd_stride = 2
 swd_stridet = 1
 swd_dist_fn = mse
-swd_rou = 0
-swd_scaling = 0.3
+swd_rou = -2
+swd_scaling = 0.05

@@ -22,7 +22,7 @@ atlas_grid_h = 4
 atlas_size_scale = 1
 
 # Training related
-sparsify_epoch = 1
+sparsify_epoch = 0
 sparsify_alpha_thresh = 0.05
 N_iters = 140
 patch_h_size = 180
