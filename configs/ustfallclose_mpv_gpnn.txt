@@ -1,6 +1,6 @@
 gpu_num = 1
 # Dataset related
-expname = sparse_ustfallclose_f50_v02Gpnnlm0PtSt5321_otherGpnnlm100PtSt3321_roun2s01
+expname = sparse_ustfallclose_f50_v02Gpnnlm0PtSt5321_otherGpnnlm100PtSt3321_roun2s01_density0005
 datadir = data/ustfallclose720p
 expdir  = logs
 init_from = meshlogs/ustfallclose720p32layer_dyn_smth02_sparsity0004_cullloopentropy_rm1st/epoch_0119.tar
@@ -37,6 +37,7 @@ rgb_smooth_loss_weight = 0.2
 a_smooth_loss_weight = 0.2
 #d_smooth_loss_weight = 0.1
 laplacian_loss_weight = 0   # to be adjusted
+density_loss_weight = 0.005
 
 i_img = 20
 i_print = 10

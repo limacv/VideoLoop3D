@@ -1,7 +1,7 @@
 gpu_num = 1
 # Dataset related
-expname = ustfallclose720p32layer_dyn_smth02_sparsity0004_cullloopentropy_rm1st
-datadir = data/ustfallclose720p
+expname = 108spring1_default_cullloopentropy_rm1st_density0001
+datadir = data/spring1720p
 expdir  = meshlogs
 factor = 2
 bd_factor = 0.85
