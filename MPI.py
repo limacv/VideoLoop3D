@@ -270,8 +270,8 @@ class MPMesh(nn.Module):
         self.rgb_mlp_type = 'rgb_sh'
         atlas_cnl = 3 * 4 + 1  # 9 for each channel
         atlas = torch.zeros((1, atlas_cnl, self.atlas.shape[-2], self.atlas.shape[-1])).type_as(self.atlas)
-        atlas[:, 0] = self.atlas.data[:, -1]
-        atlas[:, 1::4] = self.atlas.data[:, :3]
+        atlas[:, -1] = self.atlas.data[:, -1]
+        atlas[:, 0:-1:4] = self.atlas.data[:, :3]
         self.register_parameter("atlas", nn.Parameter(atlas, requires_grad=True))
 
         self.feat2rgba = SphericalHarmoic_RGB(atlas_cnl, self.view_cnl)
@@ -314,12 +314,14 @@ class MPMesh(nn.Module):
         loopmask[loopmask == ALPHA_INIT_VAL] = -10
         loopmask = torch.sigmoid(loopmask).reshape(1, 1, *self.atlas.shape[-2:])
 
-        loopmask = erode(loopmask)
-        loopmask = dilate(loopmask)
+        for i in range(erode_num):
+            loopmask = erode(loopmask)
+        for i in range(erode_num):
+            loopmask = dilate(loopmask)
 
         for i in range(erode_num):
             alpha = erode(alpha)
-        for i in range(erode_num + 2):
+        for i in range(erode_num + 1):
             alpha = dilate(alpha)
 
         # sample to batches
@@ -340,9 +342,11 @@ class MPMesh(nn.Module):
 
         mask = (atlases_alpha.max(dim=-1)[0] > alpha_thresh)
         mask_loop = (atlases_loop.max(dim=-1)[0] > loop_thresh)
+
         # mask[::10] = True
         # mask_loop[::20] = True
         # # TODO: delete this
+
         mask_loop = torch.logical_and(mask, mask_loop)
         mask_loop_short = mask_loop[mask]
         n_mask = torch.count_nonzero(mask).item()
@@ -506,8 +510,7 @@ class MPMesh(nn.Module):
 
             chunksz = self.args.chunk
             tex_input_ = torch.cat([rgba_feat_, ray_d_], dim=-1)
-            rgba_ = torch.cat([self.feat2rgba(tex_input_[batchi: batchi + chunksz])
-                              for batchi in range(0, len(tex_input_), chunksz)])
+            rgba_ = self.feat2rgba(tex_input_)
             rgba_ = torch.cat([self.rgb_activate(rgba_[..., :-1]), self.alpha_activate(rgba_[..., -1:])], dim=-1)
             return rgba_
 
@@ -522,10 +525,20 @@ class MPMesh(nn.Module):
             mpi = torch.masked_scatter(mpi, mask_dyn_flat[:, None].expand_as(canvas), rgba_dyn)
         mpi = mpi.reshape(B, H, W, num_layers, 4)
         # make rgb d a plane
-        rgbd, blend_weight = overcompose(
-            mpi[..., -1],
-            torch.cat([mpi[..., :-1], depths[..., None]], dim=-1)
+        rgb, blend_weight = overcompose(
+            mpi[..., -1], mpi[..., :-1]
         )
+        alpha = blend_weight.sum(dim=-1)
+        if len(self.args.bg_color) > 0:
+            r, g, b = int(self.args.bg_color[1:4]), int(self.args.bg_color[5:8]), int(self.args.bg_color[9:12])
+            bg_color = torch.tensor([r, g, b]).type_as(rgb) / 255
+            rgb = rgb * alpha[..., None] + bg_color[None, None, None] * (- alpha[..., None] + 1)
+
+        # get depth map
+        if self.args.normalize_blendweight_fordepth:
+            blend_weight = blend_weight / alpha.clamp_min(1e-10)[..., None]
+        disp = (depths * blend_weight).sum(-1)
+        disp_norm = (disp - 1 / self.far) / (1 / self.near - 1 / self.far)
 
         if self.args.learn_loop_mask:
             assert not self.has_dyn
@@ -539,16 +552,16 @@ class MPMesh(nn.Module):
             label, _ = overcompose(
                 mpi[..., -1].detach(), mpi_mask  # detach mpi so that geometry is not related to mpi
             )
-            rgbl = torch.cat([rgbd[..., :-1], label], dim=-1)
+            rgbl = torch.cat([rgb, label], dim=-1)
         else:
-            rgbl = rgbd[..., :-1]
+            rgbl = rgb
 
         variables = {
             "pix_to_face": pixel_to_face,
             "blend_weight": blend_weight,
             "mpi": mpi,
-            "depth": rgbd[..., -1],
-            "alpha": blend_weight.sum(dim=-1)
+            "disp_norm": disp_norm,
+            "alpha": alpha
         }
 
         return rgbl, variables
@@ -583,11 +596,18 @@ class MPMesh(nn.Module):
                 extra["a_smooth"] = smooth.reshape(1, -1) * denorm
 
             if self.args.d_smooth_loss_weight > 0:
-                depth = variables['depth']
-                smoothx = (depth[:, :, :-1] - depth[:, :, 1:]).abs().mean()
-                smoothy = (depth[:, :-1] - depth[:, 1:]).abs().mean()
-                smooth = (smoothx + smoothy).reshape(1, -1)
-                extra["d_smooth"] = smooth.reshape(1, -1)
+                disp = variables['disp_norm']
+                depth_gradx = (disp[:, 1:, :-1] - disp[:, 1:, 1:]).abs()
+                depth_grady = (disp[:, :-1, 1:] - disp[:, 1:, 1:]).abs()
+                depth_grad = depth_gradx + depth_grady
+
+                rgb = rgbl[:, :3]
+                rgb_gradx = (rgb[..., 1:, :-1] - rgb[..., 1:, 1:]).abs().sum(dim=1)
+                rgb_grady = (rgb[..., :-1, 1:] - rgb[..., 1:, 1:]).abs().sum(dim=1)
+                edge = rgb_gradx + rgb_grady
+                weight = (- edge * self.args.edge_scale + 1).clamp_min(0)
+                d_smooth = (depth_grad * weight).mean()
+                extra["d_smooth"] = d_smooth.reshape(1, -1)
 
             if self.args.density_loss_weight > 0:
                 alpha = variables["alpha"]

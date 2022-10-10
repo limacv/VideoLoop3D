@@ -104,6 +104,14 @@ class ParamsWithGradGain(nn.Module):
         return self.param
 
 
+# class InputAdaptor(nn.Module):
+#     def __init__(self, H, W):
+#         super().__init__()
+#         flows = torch
+#
+#     def forward(self, rgb):
+
+
 def generate_patchinfo(H_, W_, patch_size_, patch_stride_):
     patch_h_size, patch_w_size = patch_size_
     patch_h_stride, patch_w_stride = patch_stride_

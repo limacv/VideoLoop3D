@@ -1,6 +1,6 @@
 {
-#CUDA_VISIBLE_DEVICES=3 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
-#  --config configs/ustfallclose_mpmesh.txt
+#CUDA_VISIBLE_DEVICES=9 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/ustfallclose_mpmesh.txt &
 #
 #CUDA_VISIBLE_DEVICES=8 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
 #  --config configs/ustfallfar_mpmesh.txt &
@@ -37,45 +37,75 @@
 
 
 
-CUDA_VISIBLE_DEVICES=9 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
-  --config configs/108elevator_mpmesh.txt &
+#CUDA_VISIBLE_DEVICES=9 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108elevator_mpmesh.txt &
 
-CUDA_VISIBLE_DEVICES=8 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
-  --config configs/108fall1_mpmesh.txt &
+#CUDA_VISIBLE_DEVICES=8 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108fall1narrow_mpmesh.txt &
+#
+#CUDA_VISIBLE_DEVICES=6 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108fall1_mpmesh1.txt &
 
-CUDA_VISIBLE_DEVICES=7 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
-  --config configs/108fall2_mpmesh.txt &
+#CUDA_VISIBLE_DEVICES=2 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108fall1_mpmesh2.txt &
+#
+#CUDA_VISIBLE_DEVICES=1 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108fall1_mpmesh3.txt &
 
-CUDA_VISIBLE_DEVICES=6 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
-  --config configs/108fall3_mpmesh.txt &
-
-CUDA_VISIBLE_DEVICES=5 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
-  --config configs/108fall4_mpmesh.txt &
-
-CUDA_VISIBLE_DEVICES=4 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
-  --config configs/108fall5_mpmesh.txt &
-
-CUDA_VISIBLE_DEVICES=3 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#CUDA_VISIBLE_DEVICES=7 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108fall2_mpmesh.txt &
+#
+#CUDA_VISIBLE_DEVICES=6 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108fall3_mpmesh.txt &
+#
+#CUDA_VISIBLE_DEVICES=5 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108fall4_mpmesh.txt &
+##
+#CUDA_VISIBLE_DEVICES=4 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108fall5_mpmesh.txt &
+#
+CUDA_VISIBLE_DEVICES=2 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
   --config configs/108fall31_mpmesh.txt &
 
-CUDA_VISIBLE_DEVICES=2 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
-  --config configs/108hole_mpmesh.txt &
+#CUDA_VISIBLE_DEVICES=3 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108fall31_mpmesh_scale1.txt &
+#
+#CUDA_VISIBLE_DEVICES=4 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108fall31_mpmesh_scale2.txt &
+#
+#CUDA_VISIBLE_DEVICES=2 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108hole_mpmesh.txt &
+#
+#CUDA_VISIBLE_DEVICES=7 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108sit_mpmesh.txt &
 
-CUDA_VISIBLE_DEVICES=1 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
-  --config configs/108sit_mpmesh.txt &
+#CUDA_VISIBLE_DEVICES=8 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108sitnarrow_mpmesh.txt &
 
-CUDA_VISIBLE_DEVICES=0 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
-  --config configs/108spring1_mpmesh.txt &
+#
+#CUDA_VISIBLE_DEVICES=2 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108spring1_mpmesh.txt &
+#
+#CUDA_VISIBLE_DEVICES=1 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108spring3_mpmesh.txt &
 
-CUDA_VISIBLE_DEVICES=1 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
-  --config configs/108spring3_mpmesh.txt &
+#CUDA_VISIBLE_DEVICES=8 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/108wavingnarrow_mpmesh.txt &
 
-CUDA_VISIBLE_DEVICES=2 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
-  --config configs/108waterstair_mpmesh.txt &
+#CUDA_VISIBLE_DEVICES=9 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/109ustelevator_mpmesh.txt &
 
-CUDA_VISIBLE_DEVICES=3 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
-  --config configs/108waving_mpmesh.txt &
+#CUDA_VISIBLE_DEVICES=9 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/109duoelevator_mpmesh.txt &
 
+#CUDA_VISIBLE_DEVICES=0 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/109duoelevator_mpmesh.txt &
+#
+#CUDA_VISIBLE_DEVICES=1 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/109fence_mpmesh.txt &
+#
+#CUDA_VISIBLE_DEVICES=3 python train_3d.py --prefix /d1/scratch/PI/psander/data/VideoLoops \
+#  --config configs/109tree_mpmesh.txt &
 
   exit
 }

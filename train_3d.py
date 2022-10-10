@@ -43,7 +43,7 @@ class MVPatchDataset(Dataset):
 
         self.images = []
         self.dynmask = []
-        # TODO: for debug only, delete this
+        # # TODO: for debug only, delete this
         # self.images = [torch.rand(3, self.h, self.w)] * self.v
         # self.dynmask = [torch.rand(self.h, self.w)] * self.v
         # return
@@ -243,6 +243,7 @@ def train():
     # start training
     # ##########################
     print('Begin')
+    old_density_loss_weight = args.density_loss_weight
 
     dataset = MVPatchDataset((H, W), videos,
                              (args.patch_h_size, args.patch_w_size),
@@ -264,6 +265,7 @@ def train():
         if epoch_i < start:
             continue
 
+        # doing epoch specific task
         if epoch_i == args.sparsify_epoch:
             print("Sparsifying mesh models")
             nerf.module.sparsify_faces(erode_num=args.sparsify_erode, alpha_thresh=args.sparsify_alpha_thresh)
@@ -273,6 +275,9 @@ def train():
             print("Converting direct to data_sh")
             nerf.module.direct2sh()
             optimizer = nerf.module.get_optimizer()
+
+        args.density_loss_weight = np.clip(epoch_i / (args.density_loss_epoch + 1), 0, 1) * old_density_loss_weight
+        # print(f"densitylossweight = {args.density_loss_weight}")
 
         for iter_i, datainfo in enumerate(dataloader):
             if hasattr(nerf.module, "update_step"):

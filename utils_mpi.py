@@ -57,8 +57,8 @@ class SphericalHarmoic_RGB(nn.Module):  # alpha is view-independent
     def forward(self, x):
         feat, view = torch.split(x, [self.feat_cnl, self.view_cnl], -1)
         sh_base = eval_sh_bases(self.sh_dim, view[..., :3])
-        rgb = torch.sum(sh_base.reshape(-1, 1, self.sh_dim) * feat[..., 1:].reshape(-1, 3, self.sh_dim), dim=-1)
-        return torch.cat([rgb, feat[..., :1]], dim=-1)
+        rgb = torch.sum(sh_base.reshape(-1, 1, self.sh_dim) * feat[..., :-1].reshape(-1, 3, self.sh_dim), dim=-1)
+        return torch.cat([rgb, feat[..., -1:]], dim=-1)
 
 
 class SphericalHarmoic_RGBA(nn.Module):  # alpha is view-independent

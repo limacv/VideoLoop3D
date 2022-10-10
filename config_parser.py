@@ -22,6 +22,8 @@ def config_parser():
                         help='number of rays processed in parallel, decrease if running out of memory')
     parser.add_argument("--fp16", action='store_true',
                         help='use half precision to train')
+    parser.add_argument("--bg_color", type=str, default="",
+                        help='r000g000b000')
 
     # for MPV only, not used for MPMesh
     parser.add_argument("--mpv_frm_num", type=int, default=90,
@@ -153,10 +155,16 @@ def config_parser():
                         help='rgb smooth loss')
     parser.add_argument("--d_smooth_loss_weight", type=float, default=0,
                         help='depth smooth loss')
+    parser.add_argument("--edge_scale", type=float, default=4,
+                        help='edge aware smooth loss, 0 to disable edge aware')
+    parser.add_argument("--normalize_blendweight_fordepth", action='store_true',
+                        help='edge aware smooth loss, 0 to disable edge aware')
     parser.add_argument("--laplacian_loss_weight", type=float, default=0,
                         help='as rigid as possible smooth loss')
     parser.add_argument("--density_loss_weight", type=float, default=0,
                         help='density loss')
+    parser.add_argument("--density_loss_epoch", type=int, default=0,
+                        help='gradually grow the density to epoch')
 
     # training options
     parser.add_argument("--N_iters", type=int, default=30)

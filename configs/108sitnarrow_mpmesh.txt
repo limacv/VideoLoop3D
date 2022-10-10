@@ -1,7 +1,7 @@
 gpu_num = 1
 # Dataset related
-expname = 108sit_default_cullloopentropy_rm1st_dsmth01scale2_density005epoch50
-datadir = data/sit720p
+expname = 108sitnarrow_default_cullloopentropy_rm1st_dsmth01scale2_density005epoch50
+datadir = data/sitnarrow720p
 expdir  = meshlogs
 factor = 2
 bd_factor = 0.85

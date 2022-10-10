@@ -1,10 +1,8 @@
 gpu_num = 1
 # Dataset related
-prefix = D:\MSI_NB\source\data\VideoLoops
-expname = ustfallclose720p32layer_debug
-datadir = data/ustfallclose720p
+expname = 108fall31_default_cullloopentropy_rm1st_dsmth01scale2_bgred
+datadir = data/fall31720p
 expdir  = meshlogs
-init_from = meshlogs/108fall31_default_cullloopentropy_rm1st_dsmth01scale2_density005epoch50/epoch_0119.tar
 factor = 2
 bd_factor = 0.85
 seed = 2
@@ -13,7 +11,7 @@ bg_color = r255g000b000
 
 # mpi configuration
 vid2img_mode = dynamic
-# learn_loop_mask
+learn_loop_mask
 mpi_h_scale = 1.6
 mpi_w_scale = 1.6
 mpi_h_verts = 36
@@ -23,8 +21,10 @@ atlas_grid_h = 4
 atlas_size_scale = 1
 
 # Training related
-sparsify_epoch = 1
+sparsify_epoch = 119
 sparsify_alpha_thresh = 0.05
+sparsify_erode = 2
+sparsify_rmfirstlayer
 N_iters = 140
 patch_h_size = 180
 patch_w_size = 320
@@ -33,21 +33,19 @@ patch_w_stride = 160
 lrate = 0.05
 lrate_decay = 100
 rgb_mlp_type = direct
-direct2sh_epoch = 1
 rgb_activate = sigmoid
 alpha_activate = sigmoid
 
 sparsity_loss_weight = 0.004
 rgb_smooth_loss_weight = 0.2
 a_smooth_loss_weight = 0.2
-d_smooth_loss_weight = 0.2
-edge_scale = 1
-normalize_blendweight_fordepth
+d_smooth_loss_weight = 0.1
+edge_scale = 2
 laplacian_loss_weight = 0   # to be adjusted
-density_loss_weight = 0.004
-
+density_loss_weight = 0
+density_loss_epoch = 50
 
 i_img = 50
 i_print = 10
 i_weight = 60
-i_video = 1
+i_video = 20

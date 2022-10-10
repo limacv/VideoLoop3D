@@ -1,6 +1,6 @@
 gpu_num = 1
 # Dataset related
-expname = 108fall1_default_cullloopentropy_rm1st_density0001
+expname = 108fall1_default_cullloopentropy_rm1st_density0004_dsmth01scale2_density005epoch50
 datadir = data/fall1720p
 expdir  = meshlogs
 factor = 2
@@ -22,7 +22,7 @@ atlas_size_scale = 1
 # Training related
 sparsify_epoch = 119
 sparsify_alpha_thresh = 0.05
-sparsify_erode = 3
+sparsify_erode = 2
 sparsify_rmfirstlayer
 N_iters = 140
 patch_h_size = 180
@@ -38,9 +38,11 @@ alpha_activate = sigmoid
 sparsity_loss_weight = 0.004
 rgb_smooth_loss_weight = 0.2
 a_smooth_loss_weight = 0.2
-#d_smooth_loss_weight = 0.1
+d_smooth_loss_weight = 0.1
+edge_scale = 2
 laplacian_loss_weight = 0   # to be adjusted
-density_loss_weight = 0.001
+density_loss_weight = 0.05
+density_loss_epoch = 50
 
 i_img = 50
 i_print = 10

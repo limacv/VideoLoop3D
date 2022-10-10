@@ -21,8 +21,8 @@ atlas_size_scale = 1
 
 # Training related
 sparsify_epoch = 119
-sparsify_alpha_thresh = 0.05
-sparsify_erode = 3
+sparsify_alpha_thresh = 0.03
+sparsify_erode = 2
 sparsify_rmfirstlayer
 N_iters = 140
 patch_h_size = 180
@@ -40,7 +40,7 @@ rgb_smooth_loss_weight = 0.2
 a_smooth_loss_weight = 0.2
 #d_smooth_loss_weight = 0.1
 laplacian_loss_weight = 0   # to be adjusted
-density_loss_weight = 0.001
+density_loss_weight = 0.004
 
 i_img = 50
 i_print = 10
