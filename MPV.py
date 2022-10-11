@@ -10,7 +10,8 @@ from utils import *
 from NeRF_modules import get_embedder
 from utils_mpi import *
 import trimesh
-from utils_vid import Patch3DGPNNDirectLoss, Patch3DMSE, Patch3DAvg, Patch3DGPNNLowMemLoss
+from utils_vid import Patch3DGPNNDirectLoss, Patch3DMSE, Patch3DAvg, \
+    Patch3DGPNNLowMemLoss, Patch3DGPNNLowMemDownSampleLoss
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer import (
     look_at_view_transform,
@@ -31,7 +32,7 @@ class MPMeshVid(nn.Module):
         self.frm_num = args.mpv_frm_num
         self.isloop = args.mpv_isloop
         mpi_h, mpi_w = int(args.mpi_h_scale * H), int(args.mpi_w_scale * W)
-        self.mpi_d = args.mpi_d
+        self.mpi_d, self.near, self.far = args.mpi_d, near, far
         self.mpi_h_verts, self.mpi_w_verts = args.mpi_h_verts, args.mpi_w_verts
         self.H, self.W = H, W
 
@@ -109,25 +110,8 @@ class MPMeshVid(nn.Module):
         if self.rgb_mlp_type == "direct":
             self.feat2rgba = lambda x: x[..., :4]
             self.atlas.data[:, -1] = -2
+            self.atlas_dyn.data[:, -1] = -2
             self.use_viewdirs = False
-        elif self.rgb_mlp_type == "rgbamlp":
-            self.feat2rgba = nn.Sequential(
-                nn.Linear(self.view_cnl + args.atlas_cnl, 48), nn.ReLU(),
-                nn.Linear(48, 4)
-            )
-            self.feat2rgba[-2].bias.data[-1] = -2
-            self.use_viewdirs = True
-        elif self.rgb_mlp_type == "rgbmlp":
-            self.feat2rgba = Feat2RGBMLP_alpha(args.atlas_cnl, self.view_cnl)
-            self.use_viewdirs = True
-            self.atlas.data[:, 0] = -2
-        elif self.rgb_mlp_type == "rgbanex":
-            self.feat2rgba = NeX_RGBA(args.atlas_cnl, self.view_cnl)
-            self.use_viewdirs = True
-        elif self.rgb_mlp_type == "rgbnex":
-            self.feat2rgba = NeX_RGB(args.atlas_cnl, self.view_cnl)
-            self.use_viewdirs = True
-            self.atlas.data[:, 0] = -2
         elif self.rgb_mlp_type == "rgb_sh":
             assert self.args.atlas_cnl == 3 * 9 + 1  # one for alpha, 9 for base
             self.feat2rgba = SphericalHarmoic_RGB(args.atlas_cnl, self.view_cnl)
@@ -153,6 +137,7 @@ class MPMeshVid(nn.Module):
             'gpnn_lm': Patch3DGPNNLowMemLoss(),
             'mse': Patch3DMSE,
             'avg': Patch3DAvg,
+            'gpnn_down': Patch3DGPNNLowMemDownSampleLoss(),
         }
 
     def lod(self, factor):
@@ -160,7 +145,7 @@ class MPMeshVid(nn.Module):
             h, w = int(self.atlas_full_dyn_h * factor), int(self.atlas_full_dyn_w * factor)
             print(f"MPV.lod:: Resizing the atlas from {self.atlas_dyn.shape[-2:]} to {(h, w)}")
             new_atlas = torchvision.transforms.Resize((h, w))(self.atlas_dyn.data)
-            self.atlas_dyn.data = new_atlas
+            self.register_parameter("atlas_dyn", nn.Parameter(new_atlas, requires_grad=True))
         else:
             atlas_h, atlas_w = self.atlas.shape[-2:]
             gridh, gridw = self.atlas_grid_h, self.atlas_grid_w
@@ -370,6 +355,8 @@ class MPMeshVid(nn.Module):
                 vert, faces
             )
             pixel_to_face, depths, bary_coords = frag.pix_to_face, frag.zbuf, frag.bary_coords
+            depths = torch.reciprocal(depths)
+            depths = (depths - 1 / self.far) / (1 / self.near - 1 / self.far)
             num_layers = pixel_to_face.shape[-1]
             # currently the batching is not supported
             mask = torch.logical_and(pixel_to_face >= 0, pixel_to_face < static_face_count)
@@ -429,16 +416,25 @@ class MPMeshVid(nn.Module):
         mpi = mpi.reshape(framenum, H, W, num_layers, 4)
         # make rgb d a plane
         rgb, blend_weight = overcompose(
-            mpi[..., -1],
-            mpi[..., :-1],
+            mpi[..., -1], mpi[..., :-1],
         )
+        alpha = blend_weight.sum(dim=-1)
+        if len(self.args.bg_color) > 0:
+            r, g, b = map(float, self.args.bg_color.split('#'))
+            bg_color = torch.tensor([r, g, b]).type_as(rgb)
+            rgb = rgb * alpha[..., None] + bg_color[None, None, None] * (- alpha[..., None] + 1)
+
+        if self.args.d_smooth_loss_weight > 0:
+            disp = (depths * blend_weight).sum(-1)
+        else:
+            disp = None
 
         variables = {
             "pix_to_face": pixel_to_face,
             "blend_weight": blend_weight,
             "mpi": mpi,
-            "depth": None,  # rgbd[..., -1],
-            "alpha": blend_weight.sum(dim=-1)
+            "disp_norm": disp,
+            "alpha": alpha
         }
         return rgb[..., :3], variables
 
@@ -495,12 +491,20 @@ class MPMeshVid(nn.Module):
                 density = (alpha - 1).abs().mean()
                 extra["density"] = density.reshape(1, -1)
 
-            # if self.args.d_smooth_loss_weight > 0:
-            #     depth = variables['depth']
-            #     smoothx = (depth[:, :, :-1] - depth[:, :, 1:]).abs().mean()
-            #     smoothy = (depth[:, :-1] - depth[:, 1:]).abs().mean()
-            #     smooth = (smoothx + smoothy).reshape(1, -1)
-            #     extra["d_smooth"] = smooth.reshape(1, -1)
+            if self.args.d_smooth_loss_weight > 0:
+                disp = variables['disp_norm']
+                depth_gradx = (disp[:, 1:, :-1] - disp[:, 1:, 1:]).abs()
+                depth_grady = (disp[:, :-1, 1:] - disp[:, 1:, 1:]).abs()
+                depth_grad = depth_gradx + depth_grady
+
+                # rgb = rgbl[:, :3]
+                # rgb_gradx = (rgb[..., 1:, :-1] - rgb[..., 1:, 1:]).abs().sum(dim=1)
+                # rgb_grady = (rgb[..., :-1, 1:] - rgb[..., 1:, 1:]).abs().sum(dim=1)
+                # edge = rgb_gradx + rgb_grady
+                # weight = (- edge * self.args.edge_scale + 1).clamp_min(0)
+                # d_smooth = (depth_grad * weight).mean()
+                d_smooth = depth_grad.mean()
+                extra["d_smooth"] = d_smooth.reshape(1, -1)
 
             if self.args.laplacian_loss_weight > 0:
                 verts = self.verts.reshape(self.mpi_d, self.mpi_h_verts, self.mpi_w_verts, -1)

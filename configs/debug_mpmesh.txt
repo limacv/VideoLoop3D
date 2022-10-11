@@ -9,7 +9,7 @@ factor = 2
 bd_factor = 0.85
 seed = 2
 model_type = MPMesh
-bg_color = r255g000b000
+bg_color = -1#-1#-1
 
 # mpi configuration
 vid2img_mode = dynamic

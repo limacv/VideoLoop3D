@@ -156,6 +156,7 @@ def train(args):
         "scaling": args.swd_scaling,
         "dist_fn": args.swd_dist_fn,
         "macro_block": args.swd_macro_block,
+        "factor": args.swd_factor,
     }
     loss_config_ref = {
         "loss_name": args.loss_name_ref,
@@ -169,10 +170,11 @@ def train(args):
         "scaling": args.swd_scaling_ref,
         "dist_fn": args.swd_dist_fn_ref,
         "macro_block": args.swd_macro_block,
+        "factor": args.swd_factor_ref,
     }
     loss_cfgs = [loss_config_other] * V
-    ref_idx = list(map(int, args.loss_ref_idx.split(',')))
-    for ref_idx in ref_idx:
+    ref_idxs = list(map(int, args.loss_ref_idx.split(',')))
+    for ref_idx in ref_idxs:
         loss_cfgs[ref_idx] = loss_config_ref
 
     epoch_total_step = 0

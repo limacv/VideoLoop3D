@@ -4,6 +4,7 @@ from unfoldNd import UnfoldNd, FoldNd
 import numpy as np
 from pytorch_msssim import ssim
 import warnings
+from torchvision.transforms import Resize, InterpolationMode
 
 
 def robust_lossfun(x, rou, scale, epsilon=1e-6):
@@ -203,7 +204,7 @@ class Patch3DSWDLoss(torch.nn.Module):
 
 
 def FindNNpatchAndMerge(x, y, patch_size=7, patcht_size=7, stride=1, stridet=1,
-                        alpha=1e10, dist_fn='mse'):
+                        alpha=1e10, dist_fn='mse', **kwargs):
     alpha = None if alpha > 100 else alpha
     projx = extract_3Dpatches(x, patch_size, patcht_size, stride, stridet)  # b, c, d, h, w
     b, c, d, h, w = projx.shape
@@ -221,6 +222,39 @@ def FindNNpatchAndMerge(x, y, patch_size=7, patcht_size=7, stride=1, stridet=1,
     projy2x_unfold = projy2x_unfold.reshape(b,
                                             3, patcht_size, patch_size, patch_size,
                                             D)
+    weight = torch.ones_like(projy2x_unfold[:, :1])
+    projy2x_unfold = torch.cat([projy2x_unfold, weight], dim=1)
+    y2x = fold(projy2x_unfold.reshape(b, -1, D))
+    weight = y2x[:, 3:].clamp_min(1e-10)
+    return y2x[:, :3], weight
+
+
+def FindDownSampleNNAndMerge(xdown, ydown, x, y, factor, patch_size=7, patcht_size=7, stride=1, stridet=1,
+                             alpha=1e10, dist_fn='mse', **kwargs):
+    alpha = None if alpha > 100 else alpha
+    projx = extract_3Dpatches(xdown, patch_size, patcht_size, stride, stridet)  # b, c, d, h, w
+    b, c, d, h, w = projx.shape
+    B = b * h * w
+    D = d * h * w
+    projx = projx.permute(0, 3, 4, 2, 1).reshape(B, -1, 3, patcht_size, patch_size, patch_size)
+    projy = extract_3Dpatches(ydown, patch_size, patcht_size, stride, stridet)  # b, c, d, h, w
+    projy = projy.permute(0, 3, 4, 2, 1).reshape(B, -1, 3, patcht_size, patch_size, patch_size)
+    nns = get_NN_indices_low_memory(projx, projy, alpha, 1024, dist_fn)
+
+    # upsample
+    nns = nns.reshape(b, h, w, d)
+    nns = torch.repeat_interleave(nns, factor, -2)
+    nns = torch.repeat_interleave(nns, factor, -3)
+    projy = extract_3Dpatches(y, patch_size, patcht_size, stride, stridet)  # b, c, d, h, w
+    projy = projy.permute(0, 3, 4, 2, 1).reshape(B, -1, 3, patcht_size, patch_size, patch_size)
+    projy2x = projy[torch.arange(B, device=nns.device)[:, None], nns]
+    projy2x_unfold = projy2x.reshape(b, h * factor, w * factor, d, c).permute(0, 4, 3, 1, 2)
+    projy2x_unfold = projy2x_unfold.reshape(b,
+                                            3, patcht_size, patch_size, patch_size,
+                                            D)
+    fold = FoldNd(x.shape[-3:],
+                  kernel_size=(patcht_size, patch_size, patch_size),
+                  stride=(stridet, stride, stride))
     weight = torch.ones_like(projy2x_unfold[:, :1])
     projy2x_unfold = torch.cat([projy2x_unfold, weight], dim=1)
     y2x = fold(projy2x_unfold.reshape(b, -1, D))
@@ -306,6 +340,91 @@ class Patch3DGPNNLowMemLoss:
                                                                     **kwargs)
                         y2x[..., h_start: h_start + macro_block, w_start: w_start + macro_block] += y2x_crop
                         weight[..., h_start: h_start + macro_block, w_start: w_start + macro_block] += weight_crop
+
+                y2x = y2x / weight
+                self.last_weight = weight
+                self.last_y2x = y2x
+
+        loss = robust_lossfun(x - y2x, rou, scaling).mean()
+        return loss
+
+
+class Patch3DGPNNLowMemDownSampleLoss:
+    def __init__(self):
+        self.last_y2x = None
+        self.last_weight = None
+
+    def __call__(self, x, y, mask=None, same_input=False,
+                 macro_block=64, patch_size=7, stride=2, patcht_size=7, stridet=2,
+                 rou=0, scaling=0.2, factor=1, **kwargs):  # x is the src and y is the target
+        """
+        x, y: shape of B x 3 x f x h x w
+        """
+        if same_input:
+            weight = self.last_weight
+            y2x = self.last_y2x
+        else:
+            # standardlize the input
+            t, h, w = x.shape[-3:]
+            h = h // factor * factor
+            w = w // factor * factor
+
+            def fit_patch(s_, name, p_, st_):
+                if (s_ // factor - p_) % st_ != 0:
+                    new_s_ = (s_ // factor - p_) // st_ * st_ + p_
+                    new_s_ = new_s_ * factor
+                    warnings.warn(f'{name} doesnot satisfy ({name} - patch_size) % stride == 0. '
+                                  f'changing {name} from {s_} to {new_s_}')
+                    return new_s_
+                return s_
+
+            macro_block = fit_patch(macro_block, "macro_block", patch_size, stride)
+            h = fit_patch(h, "patch_height", patch_size, stride)
+            w = fit_patch(w, "patch_width", patch_size, stride)
+            t = fit_patch(t, "frame_num", patcht_size, stridet)
+            x = x[..., :t, :h, :w]
+            y = y[..., :h, :w]
+
+            h_down = h // factor
+            w_down = w // factor
+            with torch.no_grad():
+                # downsample
+                resize_fn = Resize((h_down, w_down),
+                                   interpolation=InterpolationMode.BILINEAR,
+                                   antialias=True)
+                x_down = resize_fn(x.reshape(-1, 1, h, w)).reshape(1, 3, t, h_down, w_down)
+                y_down = resize_fn(y.reshape(-1, 1, h, w)).reshape(1, 3, -1, h_down, w_down)
+
+                macro_stride = macro_block - patch_size + stride
+                h_starts = np.arange(0, h - macro_block + macro_stride, macro_stride)
+                w_starts = np.arange(0, w - macro_block + macro_stride, macro_stride)
+                h_starts_full = h_starts * 2 + (patch_size - 1) // 2
+                w_starts_full = w_starts * 2 + (patch_size - 1) // 2
+                macro_block_full = macro_block * 2 - patch_size + 1
+                y2x = torch.zeros_like(x)
+                weight = torch.zeros_like(x[:, :1])
+                for h_start, h_start_full in zip(h_starts, h_starts_full):
+                    # if h - h_start < patch_size:  # this checking is nolonger needed due to the fit_patch
+                    #     h_start -= patch_size
+                    for w_start, w_start_full in zip(w_starts, w_starts_full):
+                        # if w - w_start < patch_size:
+                        #     w_start -= patch_size
+                        x_crop = x[..., h_start_full: h_start_full + macro_block_full,
+                                        w_start_full: w_start_full + macro_block_full]
+                        y_crop = y[..., h_start_full: h_start_full + macro_block_full,
+                                        w_start_full: w_start_full + macro_block_full]
+                        x_down_crop = x_down[..., h_start: h_start + macro_block, w_start: w_start + macro_block]
+                        y_down_crop = y_down[..., h_start: h_start + macro_block, w_start: w_start + macro_block]
+                        # partation input into different patches and process individually
+                        y2x_crop, weight_crop = FindDownSampleNNAndMerge(x_down_crop, y_down_crop, x_crop, y_crop,
+                                                                         factor,
+                                                                         patch_size=patch_size, stride=stride,
+                                                                         patcht_size=patcht_size, stridet=stridet,
+                                                                         **kwargs)
+                        y2x[..., h_start_full: h_start_full + macro_block_full,
+                                 w_start_full: w_start_full + macro_block_full] += y2x_crop
+                        weight[..., h_start_full: h_start_full + macro_block_full,
+                                    w_start_full: w_start_full + macro_block_full] += weight_crop
 
                 y2x = y2x / weight
                 self.last_weight = weight

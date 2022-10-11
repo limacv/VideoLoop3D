@@ -331,9 +331,9 @@ class MPMesh(nn.Module):
 
         atlases_alpha = torchf.grid_sample(alpha.expand(n_quad, -1, -1, -1), grid, align_corners=True)
         atlases_alpha = atlases_alpha.permute(0, 2, 3, 1)
-        if self.args.sparsify_rmfirstlayer:
+        if self.args.sparsify_rmfirstlayer > 0:
             print("INFO::remove the first layer when sparsify")
-            n_quad_perlayer = self.mpi_h_verts * self.mpi_w_verts
+            n_quad_perlayer = self.mpi_h_verts * self.mpi_w_verts * self.args.sparsify_rmfirstlayer
             atlases_alpha[:n_quad_perlayer] = 0
         atlases_alpha = atlases_alpha.reshape(n_quad, -1)
         atlases_loop = torchf.grid_sample(loopmask.expand(n_quad, -1, -1, -1), grid, align_corners=True)
@@ -478,6 +478,7 @@ class MPMesh(nn.Module):
             )
             pixel_to_face, depths, bary_coords = frag.pix_to_face, frag.zbuf, frag.bary_coords
             depths = torch.reciprocal(depths)
+            depths = (depths - 1 / self.far) / (1 / self.near - 1 / self.far)
             num_layers = pixel_to_face.shape[-1]
             # currently the batching is not supported
             mask = torch.logical_and(pixel_to_face >= 0, pixel_to_face < static_face_count)
@@ -530,15 +531,14 @@ class MPMesh(nn.Module):
         )
         alpha = blend_weight.sum(dim=-1)
         if len(self.args.bg_color) > 0:
-            r, g, b = int(self.args.bg_color[1:4]), int(self.args.bg_color[5:8]), int(self.args.bg_color[9:12])
-            bg_color = torch.tensor([r, g, b]).type_as(rgb) / 255
+            r, g, b = map(float, self.args.bg_color.split('#'))
+            bg_color = torch.tensor([r, g, b]).type_as(rgb)
             rgb = rgb * alpha[..., None] + bg_color[None, None, None] * (- alpha[..., None] + 1)
 
         # get depth map
         if self.args.normalize_blendweight_fordepth:
             blend_weight = blend_weight / alpha.clamp_min(1e-10)[..., None]
         disp = (depths * blend_weight).sum(-1)
-        disp_norm = (disp - 1 / self.far) / (1 / self.near - 1 / self.far)
 
         if self.args.learn_loop_mask:
             assert not self.has_dyn
@@ -560,7 +560,7 @@ class MPMesh(nn.Module):
             "pix_to_face": pixel_to_face,
             "blend_weight": blend_weight,
             "mpi": mpi,
-            "disp_norm": disp_norm,
+            "disp_norm": disp,
             "alpha": alpha
         }
 

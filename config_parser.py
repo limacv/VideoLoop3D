@@ -23,7 +23,7 @@ def config_parser():
     parser.add_argument("--fp16", action='store_true',
                         help='use half precision to train')
     parser.add_argument("--bg_color", type=str, default="",
-                        help='r000g000b000')
+                        help='0#0#0')
 
     # for MPV only, not used for MPMesh
     parser.add_argument("--mpv_frm_num", type=int, default=90,
@@ -76,6 +76,10 @@ def config_parser():
                         help='alpha, bigger than 100 is equivalent to None')
     parser.add_argument("--swd_dist_fn_ref", type=str, default='mse',
                         help='alpha, bigger than 100 is equivalent to None')
+    parser.add_argument("--swd_factor", type=int, default=1,
+                        help='factor, will compute NN in factored images')
+    parser.add_argument("--swd_factor_ref", type=int, default=1,
+                        help='factor, will compute NN in factored images')
     parser.add_argument("--swd_loss_gain_ref", type=float, default=1,
                         help='alpha, bigger than 100 is equivalent to None')
 
@@ -88,14 +92,14 @@ def config_parser():
                         help='iter num in each level')
     parser.add_argument("--pyr_factor", type=float, default=0.5,
                         help='factor in each pyr level')
-    parser.add_argument("--swd_num_proj", type=int, default=128,
-                        help='produce looping videos')
+    parser.add_argument("--pyr_init_level", type=int, default=-1,
+                        help='before that, use mse')
 
     # for mpi
     parser.add_argument("--sparsify_epoch", type=int, default=-1,
                         help='sparsify the MPMesh in epoch')
-    parser.add_argument("--sparsify_rmfirstlayer", action='store_true',
-                        help='if true, will remove the first layer')
+    parser.add_argument("--sparsify_rmfirstlayer", type=int, default=0,
+                        help='if true, will remove the first #i layer')
     parser.add_argument("--sparsify_erode", type=int, default=2,
                         help='iters to dilate the alpha channel')
     parser.add_argument("--learn_loop_mask", action='store_true',

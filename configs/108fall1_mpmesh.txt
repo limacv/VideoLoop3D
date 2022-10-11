@@ -1,12 +1,13 @@
 gpu_num = 1
 # Dataset related
-expname = 108fall1_default_cullloopentropy_rm1st_density0004_dsmth01scale2_density005epoch50
+expname = 108fall1_default_cullloopentropy_dsmth01scale1_bgred
 datadir = data/fall1720p
-expdir  = meshlogs
+expdir  = meshlog1
 factor = 2
 bd_factor = 0.85
 seed = 2
 model_type = MPMesh
+bg_color = 1#0#0
 
 # mpi configuration
 vid2img_mode = dynamic
@@ -23,7 +24,6 @@ atlas_size_scale = 1
 sparsify_epoch = 119
 sparsify_alpha_thresh = 0.05
 sparsify_erode = 2
-sparsify_rmfirstlayer
 N_iters = 140
 patch_h_size = 180
 patch_w_size = 320
@@ -39,10 +39,7 @@ sparsity_loss_weight = 0.004
 rgb_smooth_loss_weight = 0.2
 a_smooth_loss_weight = 0.2
 d_smooth_loss_weight = 0.1
-edge_scale = 2
-laplacian_loss_weight = 0   # to be adjusted
-density_loss_weight = 0.05
-density_loss_epoch = 50
+edge_scale = 1
 
 i_img = 50
 i_print = 10

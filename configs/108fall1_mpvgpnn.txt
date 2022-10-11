@@ -1,9 +1,9 @@
 gpu_num = 1
 # Dataset related
-expname = sparse_ustfallclose_f50_v02Gpnnlm0PtSt5321_otherGpnnlm100PtSt3321_roun2s001
-datadir = data/ustfallclose720p
-expdir  = logs
-init_from = meshlogs/ustfallclose720p32layer_dyn_smth02_sparsity0004_cullloopentropy_rm1st/epoch_0119.tar
+expname = sparse_108fall1_f50_v31Gpnnlm0PtSt5321_otherGpnnlm100PtSt3321_dsmth005_dsmth005
+datadir = data/fall1720p
+expdir  = log1
+init_from = meshlog1/108fall1_default_cullloopentropy_dsmth01scale1_bgred/epoch_0119.tar
 factor = 2
 bd_factor = 0.85
 seed = 2
@@ -35,8 +35,7 @@ alpha_activate = sigmoid
 sparsity_loss_weight = 0.004
 rgb_smooth_loss_weight = 0.2
 a_smooth_loss_weight = 0.2
-#d_smooth_loss_weight = 0.1
-laplacian_loss_weight = 0   # to be adjusted
+d_smooth_loss_weight = 0.05
 
 i_img = 20
 i_print = 10
@@ -49,7 +48,7 @@ pyr_num_epoch = 50
 pyr_factor = 0.75
 init_std = 0.02
 
-loss_ref_idx = 0,2
+loss_ref_idx = 3,1
 swd_macro_block = 65
 swd_loss_gain_ref = 3.5
 loss_name_ref = gpnn_lm
@@ -60,7 +59,7 @@ swd_stride_ref = 2
 swd_stridet_ref = 1
 swd_dist_fn_ref = mse
 swd_rou_ref = -2
-swd_scaling_ref = 0.01
+swd_scaling_ref = 0.1
 loss_name = gpnn_lm
 swd_alpha = 10000
 swd_patch_size = 3
@@ -69,4 +68,4 @@ swd_stride = 2
 swd_stridet = 1
 swd_dist_fn = mse
 swd_rou = -2
-swd_scaling = 0.01
+swd_scaling = 0.1

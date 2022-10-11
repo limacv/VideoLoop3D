@@ -1,16 +1,17 @@
 gpu_num = 1
 # Dataset related
-prefix = D:\MSI_NB\source\data\VideoLoops
-expname = ustfallclose_debug
-datadir = data/ustfallclose720p
-expdir  = logs
-# init_from = meshlogs\ustfallclose720p32layer_dyn_smth02_sparsity0004_cullloop_rm1st\epoch_0120.tar
+expname = sparse_108fall31_f50_v28Gpnnlm0PtSt5321_otherGpnnlm100PtSt3321_dsmth005
+datadir = data/fall31720p
+expdir  = log1
+init_from = meshlog1/108fall31_default_cullloopentropy_dsmth01scale1_bgred/epoch_0119.tar
 factor = 2
 bd_factor = 0.85
 seed = 2
 model_type = MPMesh
+mpv_frm_num = 50
+mpv_isloop
 
-# mpi configuration
+# mpi configuration, not important since we load from ckpt
 mpi_h_scale = 1.1
 mpi_w_scale = 1.1
 mpi_h_verts = 27
@@ -20,10 +21,10 @@ atlas_grid_h = 4
 atlas_size_scale = 1
 
 # Training related
-patch_h_size = 32
-patch_w_size = 32
-patch_h_stride = 15
-patch_w_stride = 15
+patch_h_size = 180
+patch_h_stride = 90
+patch_w_size = 320
+patch_w_stride = 160
 lrate = 0.5
 lrate_decay = 100
 lrate_adaptive
@@ -34,11 +35,12 @@ alpha_activate = sigmoid
 sparsity_loss_weight = 0.004
 rgb_smooth_loss_weight = 0.2
 a_smooth_loss_weight = 0.2
+d_smooth_loss_weight = 0.05
 
 i_img = 20
 i_print = 10
 i_weight = 50
-i_video = 2
+i_video = 25
 
 # mpv configuration
 pyr_minimal_dim = 65
@@ -46,11 +48,11 @@ pyr_num_epoch = 50
 pyr_factor = 0.75
 init_std = 0.02
 
-loss_ref_idx = 1,6
-swd_macro_block = 45
+loss_ref_idx = 2,8
+swd_macro_block = 65
 swd_loss_gain_ref = 3.5
 loss_name_ref = gpnn_lm
-swd_alpha_ref = 10000
+swd_alpha_ref = 0
 swd_patch_size_ref = 5
 swd_patcht_size_ref = 3
 swd_stride_ref = 2
