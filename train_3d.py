@@ -103,18 +103,21 @@ def train():
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
+    expname = args.expname + args.expname_postfix
     # set up multi-processing
     if args.gpu_num == -1:
         args.gpu_num = torch.cuda.device_count()
         print(f"Using {args.gpu_num} GPU(s)")
 
-    print(f"Training: {args.expname}")
+    print(f"Training: {expname}")
     datadir = os.path.join(args.prefix, args.datadir)
     expdir = os.path.join(args.prefix, args.expdir)
-    videos, _, poses, intrins, bds, render_poses, render_intrins = load_mv_videos(basedir=datadir,
-                                                                                  factor=args.factor,
-                                                                                  bd_factor=args.bd_factor,
-                                                                                  recenter=True)
+    videos, _, poses, intrins, bds, render_poses, render_intrins = \
+        load_mv_videos(basedir=datadir,
+                       factor=args.factor,
+                       bd_factor=(args.near_factor, args.far_factor),
+                       recenter=True)
+
     H, W = videos[0][0].shape[0:2]
     V = len(videos)
     print('Loaded llff', V, H, W, poses.shape, intrins.shape, render_poses.shape, bds.shape)
@@ -122,14 +125,14 @@ def train():
     ref_pose = poses_avg(poses)[:, :4]
     ref_extrin = pose2extrin_np(ref_pose)
     ref_intrin = intrins.mean(0)
-    ref_near, ref_far = bds[:, 0].min(), bds[:, 1].max()
+    ref_near, ref_far = bds.min(), bds.max()
 
     # Summary writers
-    writer = SummaryWriter(os.path.join(expdir, args.expname))
+    writer = SummaryWriter(os.path.join(expdir, expname))
 
     # Create log dir and copy the config file
     if not args.render_only:
-        file_path = os.path.join(expdir, args.expname, f"source_{datetime.now().timestamp():.0f}")
+        file_path = os.path.join(expdir, expname, f"source_{datetime.now().timestamp():.0f}")
         os.makedirs(file_path, exist_ok=True)
         f = os.path.join(file_path, 'args.txt')
         with open(f, 'w') as file:
@@ -166,8 +169,8 @@ def train():
 
     ##########################
     # Load checkpoints
-    ckpts = [os.path.join(expdir, args.expname, f)
-             for f in sorted(os.listdir(os.path.join(expdir, args.expname))) if 'tar' in f]
+    ckpts = [os.path.join(expdir, expname, f)
+             for f in sorted(os.listdir(os.path.join(expdir, expname))) if 'tar' in f]
     print('Found ckpts', ckpts)
 
     start = 0
@@ -251,10 +254,10 @@ def train():
                              poses, intrins, args.vid2img_mode)
     # visualize the image, delete afterwards
     for viewi, (img, loopma) in enumerate(zip(dataset.images, dataset.dynmask)):
-        p = os.path.join(expdir, args.expname, f"imgvis_{args.vid2img_mode}", f"{viewi:04d}.png")
+        p = os.path.join(expdir, expname, f"imgvis_{args.vid2img_mode}", f"{viewi:04d}.png")
         os.makedirs(os.path.dirname(p), exist_ok=True)
         imageio.imwrite(p, to8b(img.permute(1, 2, 0).cpu().numpy()))
-        pm = os.path.join(expdir, args.expname, f"loopvis", f"{viewi:04d}.png")
+        pm = os.path.join(expdir, expname, f"loopvis", f"{viewi:04d}.png")
         os.makedirs(os.path.dirname(pm), exist_ok=True)
         imageio.imwrite(pm, to8b(loopma.cpu().numpy()))
     dataloader = DataLoader(dataset, 1, shuffle=True)
@@ -276,7 +279,8 @@ def train():
             nerf.module.direct2sh()
             optimizer = nerf.module.get_optimizer()
 
-        args.density_loss_weight = np.clip(epoch_i / (args.density_loss_epoch + 1), 0, 1) * old_density_loss_weight
+        pct = np.clip(epoch_i / (args.density_loss_epoch + 1), 0, 1)
+        args.density_loss_weight = pct * pct * old_density_loss_weight
         # print(f"densitylossweight = {args.density_loss_weight}")
 
         for iter_i, datainfo in enumerate(dataloader):
@@ -296,7 +300,7 @@ def train():
 
         ################################
         if (epoch_i + 1) % args.i_weights == 0:
-            save_path = os.path.join(expdir, args.expname, f'epoch_{epoch_i:04d}.tar')
+            save_path = os.path.join(expdir, expname, f'epoch_{epoch_i:04d}.tar')
             save_dict = {
                 'epoch_i': epoch_i,
                 'network_state_dict': nerf.module.state_dict()
@@ -304,17 +308,17 @@ def train():
             torch.save(save_dict, save_path)
 
         if (epoch_i + 1) % args.i_video == 0:
-            moviebase = os.path.join(expdir, args.expname, f'epoch_{epoch_i:04d}_')
+            moviebase = os.path.join(expdir, expname, f'epoch_{epoch_i:04d}_')
             if hasattr(nerf.module, "save_mesh"):
-                prefix = os.path.join(expdir, args.expname, f"mesh_epoch_{epoch_i:04d}")
+                prefix = os.path.join(expdir, expname, f"mesh_epoch_{epoch_i:04d}")
                 nerf.module.save_mesh(prefix)
 
             if hasattr(nerf.module, "save_texture"):
-                prefix = os.path.join(expdir, args.expname, f"texture_epoch_{epoch_i:04d}")
+                prefix = os.path.join(expdir, expname, f"texture_epoch_{epoch_i:04d}")
                 nerf.module.save_texture(prefix)
 
             if args.learn_loop_mask and hasattr(nerf.module, "save_loopmask"):
-                prefix = os.path.join(expdir, args.expname, f"loopable_epoch_{epoch_i:04d}")
+                prefix = os.path.join(expdir, expname, f"loopable_epoch_{epoch_i:04d}")
                 nerf.module.save_loopmask(prefix)
 
             print('render poses shape', render_extrins.shape, render_intrins.shape)

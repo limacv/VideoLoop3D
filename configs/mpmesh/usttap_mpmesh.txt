@@ -1,0 +1,9 @@
+expname = usttap720p_n095f15_rmlayer_smth08
+datadir = data/usttap720p
+near_factor = 0.95
+far_factor = 1.5
+sparsify_rmfirstlayer = 1
+
+sparsity_loss_weight = 0.004
+rgb_smooth_loss_weight = 0.5
+a_smooth_loss_weight = 0.5

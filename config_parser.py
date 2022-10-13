@@ -3,21 +3,28 @@ import configargparse
 
 def config_parser():
     parser = configargparse.ArgumentParser()
+    # Two sets of config for naive hierarchical config structure
     parser.add_argument('--config', is_config_file=True,
                         help='config file path')
+    parser.add_argument('--config1', is_config_file=True, default='',
+                        help='config file path')
+    parser.add_argument("--expname", type=str,
+                        help='experiment name')
+    parser.add_argument("--expname_postfix", type=str, default='',
+                        help='experiment name')
+
     parser.add_argument("--prefix", type=str, default='',
                         help='input data directory')
     parser.add_argument("--datadir", type=str,
                         help='input data directory')
     parser.add_argument("--expdir", type=str,
                         help='where to store ckpts and logs')
-    parser.add_argument("--expname", type=str,
-                        help='experiment name')
     parser.add_argument("--seed", type=int, default=666,
                         help='random seed')
     parser.add_argument("--factor", type=int, default=8,
                         help='downsample factor for LLFF images')
-    parser.add_argument("--bd_factor", type=float, default=0.75, help='expand factor of the ROI box')
+    parser.add_argument("--near_factor", type=float, default=0.9, help='expand factor of the ROI box')
+    parser.add_argument("--far_factor", type=float, default=2, help='expand factor of the ROI box')
     parser.add_argument("--chunk", type=int, default=1024 * 32,
                         help='number of rays processed in parallel, decrease if running out of memory')
     parser.add_argument("--fp16", action='store_true',

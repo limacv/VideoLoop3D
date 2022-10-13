@@ -55,6 +55,7 @@ frame_num = len(atlas_dynamic)
 
 
 def normalize_uv(uv, h, w):
+    uv[:, 1] = -uv[:, 1]
     uv = uv * 0.5 + 0.5
     uv = uv * np.array([w - 1, h - 1]) / np.array([w, h]) + 0.5 / np.array([w, h])
     return uv

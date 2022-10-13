@@ -73,13 +73,15 @@ def train(args):
         device = 'cpu'
         print(f"Using CPU for training")
 
-    print(f"Training: {args.expname}")
+    expname = args.expname + args.expname_postfix
+    print(f"Training: {expname}")
     datadir = os.path.join(args.prefix, args.datadir)
     expdir = os.path.join(args.prefix, args.expdir)
-    videos, FPS, poses, intrins, bds, render_poses, render_intrins = load_mv_videos(basedir=datadir,
-                                                                                    factor=args.factor,
-                                                                                    bd_factor=args.bd_factor,
-                                                                                    recenter=True)
+    videos, FPS, poses, intrins, bds, render_poses, render_intrins = \
+        load_mv_videos(basedir=datadir,
+                       factor=args.factor,
+                       bd_factor=(args.near_factor, args.far_factor),
+                       recenter=True)
 
     H, W = videos[0][0].shape[0:2]
     V = len(videos)
@@ -88,7 +90,7 @@ def train(args):
     ref_pose = poses_avg(poses)[:, :4]
     ref_extrin = pose2extrin_np(ref_pose)
     ref_intrin = intrins[0]
-    ref_near, ref_far = bds[:, 0].min(), bds[:, 1].max()
+    ref_near, ref_far = bds.min(), bds.max()
 
     # Resove pyramid related configs, controled by (pyr_stage, pyr_factor, N_iters)
     #                                           or (pyr_minimal_dim, pyr_factor, pyr_num_epoch)
@@ -110,11 +112,11 @@ def train(args):
     # end of pyramid infomation
 
     # Summary writers
-    writer = SummaryWriter(os.path.join(expdir, args.expname))
+    writer = SummaryWriter(os.path.join(expdir, expname))
 
     # Create log dir and copy the config file
     if not args.render_only:
-        file_path = os.path.join(expdir, args.expname, f"source_{datetime.now().timestamp():.0f}")
+        file_path = os.path.join(expdir, expname, f"source_{datetime.now().timestamp():.0f}")
         os.makedirs(file_path, exist_ok=True)
         f = os.path.join(file_path, 'args.txt')
         with open(f, 'w') as file:
@@ -182,8 +184,8 @@ def train(args):
 
     ##########################
     # load from checkpoint
-    ckpts = [os.path.join(expdir, args.expname, f)
-             for f in sorted(os.listdir(os.path.join(expdir, args.expname))) if 'tar' in f]
+    ckpts = [os.path.join(expdir, expname, f)
+             for f in sorted(os.listdir(os.path.join(expdir, expname))) if 'tar' in f]
     print('Found ckpts', ckpts)
 
     if len(args.init_from) > 0:
@@ -273,7 +275,7 @@ def train(args):
 
             # saving after epoch
             if (epoch_total_step + 1) % args.i_weights == 0:
-                save_path = os.path.join(expdir, args.expname, f'l{pyr_i}_epoch_{epoch_i:04d}.tar')
+                save_path = os.path.join(expdir, expname, f'l{pyr_i}_epoch_{epoch_i:04d}.tar')
                 save_dict = {
                     'epoch_i': epoch_i,
                     'epoch_total_step': epoch_total_step,
@@ -286,13 +288,13 @@ def train(args):
                 torch.save(save_dict, save_path)
 
             if (epoch_total_step + 1) % args.i_video == 0:
-                moviebase = os.path.join(expdir, args.expname, f'l{pyr_i}_{epoch_i:04d}_')
+                moviebase = os.path.join(expdir, expname, f'l{pyr_i}_{epoch_i:04d}_')
                 if hasattr(nerf.module, "save_mesh"):
-                    prefix = os.path.join(expdir, args.expname, f"mesh_l{pyr_i}_{epoch_i:04d}")
+                    prefix = os.path.join(expdir, expname, f"mesh_l{pyr_i}_{epoch_i:04d}")
                     nerf.module.save_mesh(prefix)
 
                 if hasattr(nerf.module, "save_texture"):
-                    prefix = os.path.join(expdir, args.expname, f"texture_l{pyr_i}_{epoch_i:04d}")
+                    prefix = os.path.join(expdir, expname, f"texture_l{pyr_i}_{epoch_i:04d}")
                     nerf.module.save_texture(prefix)
 
                 print('render poses shape', render_extrins.shape, render_intrins.shape)

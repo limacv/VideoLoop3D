@@ -1,0 +1,9 @@
+expname = 109duoelevator_n085f4_rmlayer_smth05
+datadir = data/duoelevator720p
+near_factor = 0.85
+far_factor = 4
+sparsify_rmfirstlayer = 1
+
+sparsity_loss_weight = 0.004
+rgb_smooth_loss_weight = 0.5
+a_smooth_loss_weight = 0.5

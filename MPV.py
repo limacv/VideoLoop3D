@@ -356,7 +356,6 @@ class MPMeshVid(nn.Module):
             )
             pixel_to_face, depths, bary_coords = frag.pix_to_face, frag.zbuf, frag.bary_coords
             depths = torch.reciprocal(depths)
-            depths = (depths - 1 / self.far) / (1 / self.near - 1 / self.far)
             num_layers = pixel_to_face.shape[-1]
             # currently the batching is not supported
             mask = torch.logical_and(pixel_to_face >= 0, pixel_to_face < static_face_count)

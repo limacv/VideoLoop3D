@@ -1,0 +1,9 @@
+expname = 108fall1narrow_n09f2_rmlayer_smth05
+datadir = data/fall1narrow720p
+near_factor = 0.90
+far_factor = 2
+sparsify_rmfirstlayer = 1
+
+sparsity_loss_weight = 0.004
+rgb_smooth_loss_weight = 0.5
+a_smooth_loss_weight = 0.5

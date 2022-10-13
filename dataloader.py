@@ -53,7 +53,7 @@ def _load_data(basedir, factor=None, width=None, height=None, load_imgs=True):
     return poses, bds, imgs
 
 
-def load_llff_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=False, path_epi=False, load_img=True):
+def load_llff_data(basedir, factor=8, recenter=True, bd_factor=(1, 1), spherify=False, path_epi=False, load_img=True):
     poses, bds, imgs = _load_data(basedir, factor=factor, load_imgs=load_img)
     # factor=8 downsamples original imgs by 8x
     print('Loaded', basedir, bds.min(), bds.max())
@@ -70,9 +70,12 @@ def load_llff_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=Fal
     bds = np.moveaxis(bds, -1, 0).astype(np.float32)
 
     # Rescale if bd_factor is provided
-    sc = 1. if bd_factor is None else 1. / (bds.min() * bd_factor)
+    bds = np.array([bds.min(), bds.max()]).astype(poses.dtype)
+    sc = 1. / bds[0]
     poses[:, :3, 3] *= sc
     bds *= sc
+    if bd_factor is not None:
+        bds *= bd_factor
 
     if recenter:
         poses = recenter_poses(poses)
@@ -129,8 +132,9 @@ def load_llff_data(basedir, factor=8, recenter=True, bd_factor=.75, spherify=Fal
     return imgs, poses, intrins, bds, render_poses, render_intrins
 
 
-def load_mv_videos(basedir, factor=1, recenter=True, bd_factor=.75):
-    _, poses, intrins, bds, render_poses, render_intrins = load_llff_data(basedir, factor, recenter, bd_factor,
+def load_mv_videos(basedir, factor=1, recenter=True, bd_factor=(1, 1)):
+    _, poses, intrins, bds, render_poses, render_intrins = load_llff_data(basedir, factor, recenter,
+                                                                          bd_factor=bd_factor,
                                                                           load_img=False)
     videos_path = sorted(glob.glob(basedir + f"/videos_{factor}/*"))
     videos = [imageio.mimread(vp, memtest=False) for vp in videos_path]

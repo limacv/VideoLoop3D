@@ -1,0 +1,9 @@
+expname = 109tree_n095f4_rmlayer_smth05
+datadir = data/tree720p
+near_factor = 0.95
+far_factor = 4
+sparsify_rmfirstlayer = 1
+
+sparsity_loss_weight = 0.004
+rgb_smooth_loss_weight = 0.5
+a_smooth_loss_weight = 0.5

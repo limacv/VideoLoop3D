@@ -1,0 +1,11 @@
+expname = ustfallfar720p_n095f2_rmlayer_smth08_density002
+datadir = data/ustfallfar720p/
+near_factor = 0.95
+far_factor = 2
+sparsify_rmfirstlayer = 1
+
+sparsity_loss_weight = 0.004
+rgb_smooth_loss_weight = 0.5
+a_smooth_loss_weight = 0.5
+density_loss_weight = 0.02
+density_loss_epoch = 50

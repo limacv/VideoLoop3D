@@ -1,0 +1,27 @@
+expname = sparse_109tree_f50_v37A0PtSt5321_otherA100PtSt3321_fromdensity
+datadir = data/tree720p
+init_from = meshlog2/109tree_n095f4_rmlayer_smth05_density002/epoch_0119.tar
+mpv_frm_num = 50
+mpv_isloop
+
+loss_ref_idx = 3,7
+swd_macro_block = 65
+swd_loss_gain_ref = 3.5
+loss_name_ref = gpnn_lm
+swd_alpha_ref = 0
+swd_patch_size_ref = 5
+swd_patcht_size_ref = 3
+swd_stride_ref = 2
+swd_stridet_ref = 1
+swd_dist_fn_ref = mse
+swd_rou_ref = -2
+swd_scaling_ref = 0.1
+loss_name = gpnn_lm
+swd_alpha = 10000
+swd_patch_size = 3
+swd_patcht_size = 3
+swd_stride = 2
+swd_stridet = 1
+swd_dist_fn = mse
+swd_rou = -2
+swd_scaling = 0.1
