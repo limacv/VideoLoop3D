@@ -1,0 +1,12 @@
+expname = 109fence_n09f20_rmlayer1_smth05_density002
+datadir = data/fence720p
+near_factor = 0.9
+far_factor = 20
+sparsify_rmfirstlayer = 1
+
+
+sparsity_loss_weight = 0.004
+rgb_smooth_loss_weight = 0.5
+a_smooth_loss_weight = 0.5
+density_loss_weight = 0.02
+density_loss_epoch = 60

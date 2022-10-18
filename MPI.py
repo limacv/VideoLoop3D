@@ -321,7 +321,7 @@ class MPMesh(nn.Module):
 
         for i in range(erode_num):
             alpha = erode(alpha)
-        for i in range(erode_num + 1):
+        for i in range(erode_num + 2):
             alpha = dilate(alpha)
 
         # sample to batches
@@ -555,11 +555,13 @@ class MPMesh(nn.Module):
             rgbl = torch.cat([rgb, label], dim=-1)
         else:
             rgbl = rgb
+            mpi_mask = None
 
         variables = {
             "pix_to_face": pixel_to_face,
             "blend_weight": blend_weight,
             "mpi": mpi,
+            "loopmask3d": mpi_mask[..., 0],
             "disp_norm": disp,
             "alpha": alpha
         }
@@ -609,6 +611,14 @@ class MPMesh(nn.Module):
                 d_smooth = (depth_grad * weight).mean()
                 extra["d_smooth"] = d_smooth.reshape(1, -1)
 
+            if self.args.l_smooth_loss_weight > 0 and variables['loopmask3d'] is not None:
+                loopmask = variables['loopmask3d']
+                denorm = loopmask.shape[-1] / self.mpi_d
+                smoothx = (loopmask[:, :, :-1] - loopmask[:, :, 1:]).abs().mean()
+                smoothy = (loopmask[:, :-1] - loopmask[:, 1:]).abs().mean()
+                smooth = (smoothx + smoothy).reshape(1, -1)
+                extra['l_smooth'] = smooth.reshape(1, -1) * denorm
+
             if self.args.density_loss_weight > 0:
                 alpha = variables["alpha"]
                 density = (alpha - 1).abs().mean()
@@ -627,3 +637,4 @@ class MPMesh(nn.Module):
                 verts_laplacian = (verts_laplacian_y - verts).norm(dim=-1) + (verts_laplacian_x - verts).norm(dim=-1)
                 extra["laplacian"] = verts_laplacian.mean().reshape(1, -1)
         return rgbl, extra
+

@@ -166,6 +166,8 @@ def config_parser():
                         help='rgb smooth loss')
     parser.add_argument("--d_smooth_loss_weight", type=float, default=0,
                         help='depth smooth loss')
+    parser.add_argument("--l_smooth_loss_weight", type=float, default=0,
+                        help='loop mask (label) smooth loss')
     parser.add_argument("--edge_scale", type=float, default=4,
                         help='edge aware smooth loss, 0 to disable edge aware')
     parser.add_argument("--normalize_blendweight_fordepth", action='store_true',

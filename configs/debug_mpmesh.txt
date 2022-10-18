@@ -4,5 +4,6 @@ prefix = D:\MSI_NB\source\data\VideoLoops
 expname = ustfallclose720p32layer_debug
 datadir = data/ustfallclose720p
 expdir  = meshlogs
-init_from = meshlogs/108fall31_default_cullloopentropy_rm1st_dsmth01scale2_density005epoch50/epoch_0119.tar
+# init_from = meshlogs/108fall31_default_cullloopentropy_rm1st_dsmth01scale2_density005epoch50/epoch_0119.tar
 factor = 2
+l_smooth_loss_weight = 0.1

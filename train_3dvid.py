@@ -127,6 +127,10 @@ def train(args):
             f = os.path.join(file_path, 'config.txt')
             with open(f, 'w') as file:
                 file.write(open(args.config, 'r').read())
+        if args.config1 is not None:
+            f = os.path.join(file_path, 'config1.txt')
+            with open(f, 'w') as file:
+                file.write(open(args.config1, 'r').read())
         files_copy = [fs for fs in os.listdir(".") if ".py" in fs]
         for fc in files_copy:
             shutil.copyfile(f"./{fc}", os.path.join(file_path, fc))

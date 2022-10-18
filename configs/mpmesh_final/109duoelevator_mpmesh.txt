@@ -1,0 +1,11 @@
+expname = 109duoelevator_n08f4_rmlayer_smth05_bgred
+datadir = data/duoelevator720p
+near_factor = 0.8
+far_factor = 4
+sparsify_rmfirstlayer = 0
+bg_color = 0.5#0#0
+
+
+sparsity_loss_weight = 0.004
+rgb_smooth_loss_weight = 0.5
+a_smooth_loss_weight = 0.5

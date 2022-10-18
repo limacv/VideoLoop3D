@@ -1,0 +1,28 @@
+expname = sparse_usttap_f60_v02A0PtSt5321_otherA100PtSt3321
+datadir = data/usttap720p
+init_from = meshlogfinal/usttap720p_n095f15_rmlayer3_smth08_density002/epoch_0119.tar
+mpv_frm_num = 60
+mpv_isloop
+
+loss_ref_idx = 0,2
+swd_macro_block = 65
+swd_loss_gain_ref = 3.5
+loss_name_ref = gpnn_lm
+swd_alpha_ref = 0
+swd_patch_size_ref = 5
+swd_patcht_size_ref = 3
+swd_stride_ref = 2
+swd_stridet_ref = 1
+swd_dist_fn_ref = mse
+swd_rou_ref = -2
+swd_scaling_ref = 0.1
+loss_name = gpnn_lm
+swd_alpha = 10000
+swd_patch_size = 3
+swd_patcht_size = 3
+swd_stride = 2
+swd_stridet = 1
+swd_dist_fn = mse
+swd_rou = -2
+swd_scaling = 0.1
+
