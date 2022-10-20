@@ -1,6 +1,6 @@
-expname = sparse_109fence_f50_v15A0PtStB341_otherA100PtSt3321
+expname = sparse_109fence_f50_v15A0PtStB341_otherA100PtSt3321_loopv2
 datadir = data/fence720p
-init_from = meshlogfinal/109fence_n09f20_rmlayer1_smth05_density002/epoch_0119.tar
+init_from = meshlogfinal_loopv2/109fence_n09f20_rmlayer1_smth05_density002_loopmav2/epoch_0119.tar
 mpv_frm_num = 50
 mpv_isloop
 

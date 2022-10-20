@@ -561,7 +561,7 @@ class MPMesh(nn.Module):
             "pix_to_face": pixel_to_face,
             "blend_weight": blend_weight,
             "mpi": mpi,
-            "loopmask3d": mpi_mask[..., 0],
+            "loopmask3d": mpi_mask,
             "disp_norm": disp,
             "alpha": alpha
         }
@@ -612,7 +612,7 @@ class MPMesh(nn.Module):
                 extra["d_smooth"] = d_smooth.reshape(1, -1)
 
             if self.args.l_smooth_loss_weight > 0 and variables['loopmask3d'] is not None:
-                loopmask = variables['loopmask3d']
+                loopmask = variables['loopmask3d'][..., 0]
                 denorm = loopmask.shape[-1] / self.mpi_d
                 smoothx = (loopmask[:, :, :-1] - loopmask[:, :, 1:]).abs().mean()
                 smoothy = (loopmask[:, :-1] - loopmask[:, 1:]).abs().mean()

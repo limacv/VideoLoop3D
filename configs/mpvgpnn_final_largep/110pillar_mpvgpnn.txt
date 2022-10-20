@@ -1,6 +1,6 @@
-expname = sparse_110pillar_f50_v28A0PtStB341_otherA100PtSt3321
+expname = sparse_110pillar_f50_v28A0PtStB341_otherA100PtSt3321_loopv2
 datadir = data/pillar720p
-init_from = meshlogfinal/110pillar_n09f12_rmlayer4_smth05_density002/epoch_0119.tar
+init_from = meshlogfinal_loopv2/110pillar_n09f12_rmlayer4_smth05_density002_loopmav2/epoch_0119.tar
 mpv_frm_num = 50
 mpv_isloop
 

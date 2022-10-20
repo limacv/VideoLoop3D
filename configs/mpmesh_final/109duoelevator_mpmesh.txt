@@ -1,4 +1,4 @@
-expname = 109duoelevator_n08f4_rmlayer_smth05_bgred
+expname = 109duoelevator_n08f4_rmlayer_smth05_bgred_loopmav2
 datadir = data/duoelevator720p
 near_factor = 0.8
 far_factor = 4

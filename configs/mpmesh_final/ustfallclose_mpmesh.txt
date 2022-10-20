@@ -1,4 +1,4 @@
-expname = ustfallclose_n1f12_rmlayer0_smth05_density002
+expname = ustfallclose_n1f12_rmlayer0_smth05_density002_loopmav2
 datadir = data/ustfallclose720p
 near_factor = 1
 far_factor = 1.2

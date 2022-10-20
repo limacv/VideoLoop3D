@@ -1,0 +1,9 @@
+expname = sparse_108fall1narrow_f50_mse
+datadir = data/fall1narrow720p
+init_from = meshlogfinal/108fall1narrow_n09f2_rmlayer4_smth05_density002/epoch_0119.tar
+mpv_frm_num = 50
+mpv_isloop
+
+loss_ref_idx = 0
+loss_name_ref = mse
+loss_name = mse

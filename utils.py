@@ -334,16 +334,20 @@ class DataParallelCPU:
         return self.module(*args, **kwargs)
 
 
-def compute_loopable_mask(vid, eps=10 / 255):
-    rises = np.zeros_like(vid[0]) > 0
-    falls = np.zeros_like(vid[0]) > 0
-    minval = vid[0]
-    maxval = vid[0]
+def compute_loopable_mask(vid, eps=15 / 255, factor=2):
+    ori_size = vid[0].shape[:2]
+
+    vid0 = cv2.resize(vid[0], None, None, 1 / factor, 1 / factor)
+    rises = np.zeros_like(vid0) > 0
+    falls = np.zeros_like(vid0) > 0
+    minval = vid0
+    maxval = vid0
     for im in vid[1:]:
-        minval = np.minimum(minval, im)
-        maxval = np.maximum(maxval, im)
-        rises = np.logical_or(im - minval > eps, rises)
-        falls = np.logical_or(maxval - im > eps, falls)
+        im_down = cv2.resize(im, None, None, 1 / factor, 1 / factor)
+        minval = np.minimum(minval, im_down)
+        maxval = np.maximum(maxval, im_down)
+        rises = np.logical_or(im_down - minval > eps, rises)
+        falls = np.logical_or(maxval - im_down > eps, falls)
 
     unchangging = np.logical_and(np.logical_not(rises), np.logical_not(falls))
     unchangging = np.all(unchangging, axis=-1)
@@ -351,9 +355,10 @@ def compute_loopable_mask(vid, eps=10 / 255):
     unloopable = np.any(unloopable, axis=-1)
     loopable = np.logical_not(np.logical_or(unchangging, unloopable))
 
-    loopable = cv2.erode(loopable.astype(np.uint8), np.ones((3, 3)))
-    loopable = cv2.dilate(loopable.astype(np.uint8), np.ones((3, 3)))
+    # loopable = cv2.erode(loopable.astype(np.uint8), np.ones((3, 3)))
+    # loopable = cv2.dilate(loopable.astype(np.uint8), np.ones((3, 3)))
     label = np.stack([loopable, unloopable.astype(np.uint8), unchangging.astype(np.uint8)], axis=-1) * 255
     label_smooth = cv2.GaussianBlur(label, (5, 5), 0)
+    label_smooth = cv2.resize(label_smooth.astype(np.float32), ori_size[::-1], None)
     loopable_smooth = label_smooth.argmax(axis=-1) == 0
     return loopable_smooth

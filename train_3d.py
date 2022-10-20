@@ -43,7 +43,7 @@ class MVPatchDataset(Dataset):
 
         self.images = []
         self.dynmask = []
-        # # TODO: for debug only, delete this
+        # TODO: for debug only, delete this
         # self.images = [torch.rand(3, self.h, self.w)] * self.v
         # self.dynmask = [torch.rand(self.h, self.w)] * self.v
         # return

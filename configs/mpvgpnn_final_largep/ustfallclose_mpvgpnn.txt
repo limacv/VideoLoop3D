@@ -1,6 +1,6 @@
-expname = sparse_ustfallclose_f50_v02A0PtStB341_otherA100PtSt3321
+expname = sparse_ustfallclose_f50_v02A0PtStB341_otherA100PtSt3321_loopv2
 datadir = data/ustfallclose720p
-init_from = meshlogfinal/ustfallclose_n1f12_rmlayer0_smth05_density002/epoch_0119.tar
+init_from = meshlogfinal_loopv2/ustfallclose_n1f12_rmlayer0_smth05_density002_loopmav2/epoch_0119.tar
 mpv_frm_num = 60
 mpv_isloop
 

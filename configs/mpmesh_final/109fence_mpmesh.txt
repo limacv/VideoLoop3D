@@ -1,4 +1,4 @@
-expname = 109fence_n09f20_rmlayer1_smth05_density002
+expname = 109fence_n09f20_rmlayer1_smth05_density002_loopmav2
 datadir = data/fence720p
 near_factor = 0.9
 far_factor = 20

@@ -1,4 +1,4 @@
-expname = usttap720p_n095f15_rmlayer3_smth08_density002
+expname = usttap720p_n095f15_rmlayer3_smth08_density002_loopmav2
 datadir = data/usttap720p
 near_factor = 0.95
 far_factor = 1.5

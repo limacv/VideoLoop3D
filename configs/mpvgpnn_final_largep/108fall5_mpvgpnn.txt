@@ -1,6 +1,6 @@
-expname = sparse_108fall5_f50_v38APtStB341_otherA100PtSt3321
+expname = sparse_108fall5_f50_v38APtStB341_otherA100PtSt3321_loopv2
 datadir = data/fall5720p
-init_from = meshlogfinal/108fall5_n098f2_rmlayer0_smth05_density002/epoch_0119.tar
+init_from = meshlogfinal_loopv2/108fall5_n098f2_rmlayer0_smth05_density002_loopmav2/epoch_0119.tar
 mpv_frm_num = 50
 mpv_isloop
 

@@ -1,4 +1,4 @@
-expname = 108fall3_n098f5_rmlayer0_smth05_density002
+expname = 108fall3_n098f5_rmlayer0_smth05_density002_loopmav2
 datadir = data/fall3720p
 near_factor = 0.98
 far_factor = 5

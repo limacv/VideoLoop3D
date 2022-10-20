@@ -1,6 +1,6 @@
-expname = sparse_109tree_f50_v37A0PtStB341_otherA100PtSt3321
+expname = sparse_109tree_f50_v37A0PtStB341_otherA100PtSt3321_loopv2
 datadir = data/tree720p
-init_from = meshlogfinal/109tree_n095f4_rmlayer1_smth05_density002/epoch_0119.tar
+init_from = meshlogfinal_loopv2/109tree_n095f4_rmlayer1_smth05_density002_loopmav2/epoch_0119.tar
 mpv_frm_num = 50
 mpv_isloop
 

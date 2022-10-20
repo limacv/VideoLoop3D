@@ -1,7 +1,7 @@
 gpu_num = 1
 # Dataset related
 prefix = /d1/scratch/PI/psander/data/VideoLoops
-expdir  = meshlog2
+expdir  = meshlogfinal_loopv2
 factor = 2
 seed = 2
 model_type = MPMesh

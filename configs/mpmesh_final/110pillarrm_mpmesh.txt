@@ -1,4 +1,4 @@
-expname = 110pillar_n09f12_rmlayer0_smth05_density002
+expname = 110pillar_n09f12_rmlayer4_smth05_density002_loopmav2
 datadir = data/pillar720p
 near_factor = 0.9
 far_factor = 1.2

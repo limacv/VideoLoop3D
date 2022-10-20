@@ -1,6 +1,6 @@
-expname = sparse_usttap_f60_v02A0PtStB341_otherA100PtSt3321
+expname = sparse_usttap_f60_v02A0PtStB341_otherA100PtSt3321_loopv2
 datadir = data/usttap720p
-init_from = meshlogfinal/usttap720p_n095f15_rmlayer3_smth08_density002/epoch_0119.tar
+init_from = meshlogfinal_loopv2/usttap720p_n095f15_rmlayer3_smth08_density002_loopmav2/epoch_0119.tar
 mpv_frm_num = 60
 mpv_isloop
 
