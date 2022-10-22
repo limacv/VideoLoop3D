@@ -43,6 +43,7 @@ class MPMesh(nn.Module):
         mpi_h, mpi_w = int(args.mpi_h_scale * H), int(args.mpi_w_scale * W)
         self.mpi_d, self.near, self.far = args.mpi_d, near, far
         self.mpi_h_verts, self.mpi_w_verts = args.mpi_h_verts, args.mpi_w_verts
+        self.mpi_h, self.mpi_w = mpi_h, mpi_w
         self.H, self.W = H, W
         self.atlas_grid_h, self.atlas_grid_w = args.atlas_grid_h, self.mpi_d // args.atlas_grid_h
         assert self.mpi_d % self.atlas_grid_h == 0, "mpi_d and atlas_grid_h should match"
@@ -335,6 +336,7 @@ class MPMesh(nn.Module):
             print("INFO::remove the first layer when sparsify")
             n_quad_perlayer = self.mpi_h_verts * self.mpi_w_verts * self.args.sparsify_rmfirstlayer
             atlases_alpha[:n_quad_perlayer] = 0
+
         atlases_alpha = atlases_alpha.reshape(n_quad, -1)
         atlases_loop = torchf.grid_sample(loopmask.expand(n_quad, -1, -1, -1), grid, align_corners=True)
         atlases_loop = atlases_loop.permute(0, 2, 3, 1)

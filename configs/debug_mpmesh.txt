@@ -7,6 +7,6 @@ expdir  = meshlogs
 init_from = meshlogfinal/108fall4_n095f12_rmlayer2_smth05_density002/epoch_0119.tar
 factor = 2
 l_smooth_loss_weight = 0.1
-sparsify_epoch = 20000
+# sparsify_epoch = 20000
 patch_h_size = 360
 patch_w_size = 640

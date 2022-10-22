@@ -1,7 +1,7 @@
-expname = 108fall4_n095f12_rmlayer2_smth05_density002_loopmav2
-datadir = data/fall4720p
-near_factor = 0.95
-far_factor = 1.2
+expname = 1020rock720p_n098f3_rmlayer2_smth05_density002_loopmav2_athr002
+datadir = data/1020rock720p
+near_factor = 0.98
+far_factor = 3
 sparsify_rmfirstlayer = 2
 sparsify_alpha_thresh = 0.02
 

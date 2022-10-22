@@ -1,7 +1,7 @@
-expname = 109fence_n09f20_rmlayer1_smth05_density002_loopmav2
-datadir = data/fence720p
-near_factor = 0.9
-far_factor = 20
+expname = 1017yuan720p_n095f4_rmlayer1_smth05_density002_loopmav2
+datadir = data/1017yuan720p
+near_factor = 0.95
+far_factor = 4
 sparsify_rmfirstlayer = 1
 
 

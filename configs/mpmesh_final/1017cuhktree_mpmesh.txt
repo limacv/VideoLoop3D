@@ -1,9 +1,9 @@
-expname = 108fall3_n098f5_rmlayer1_smth05_density002_loopmav2
-datadir = data/fall3720p
+expname = 1017cuhktree_n098f5_rmlayer1_smth05_density002_loopmav2_athr002
+datadir = data/1017cuhktree720p
 near_factor = 0.98
 far_factor = 5
 sparsify_rmfirstlayer = 1
-sparsify_alpha_thresh = 0.03
+sparsify_alpha_thresh = 0.02
 
 sparsity_loss_weight = 0.004
 rgb_smooth_loss_weight = 0.5

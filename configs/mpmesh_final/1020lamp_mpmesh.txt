@@ -1,0 +1,12 @@
+expname = 1020lamp720p_n099f10_rmlayer0_smth05_density002_loopmav2
+datadir = data/1020lamp720p
+near_factor = 0.99
+far_factor = 10
+sparsify_rmfirstlayer = 0
+
+
+sparsity_loss_weight = 0.004
+rgb_smooth_loss_weight = 0.5
+a_smooth_loss_weight = 0.5
+density_loss_weight = 0.02
+density_loss_epoch = 60

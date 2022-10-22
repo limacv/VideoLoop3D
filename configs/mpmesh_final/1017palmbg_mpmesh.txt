@@ -1,0 +1,13 @@
+expname = 1017palm_n098f3_rmlayer0_smth05_density002_loopmav2_bgwhite
+datadir = data/1017palm720p
+near_factor = 0.98
+far_factor = 3
+sparsify_rmfirstlayer = 1
+
+
+sparsity_loss_weight = 0.004
+rgb_smooth_loss_weight = 0.5
+a_smooth_loss_weight = 0.5
+density_loss_weight = 0.02
+density_loss_epoch = 60
+bg_color = 1#1#1
