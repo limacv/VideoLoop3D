@@ -13,7 +13,6 @@ from dataloader import load_mv_videos, poses_avg
 from utils import *
 import shutil
 from datetime import datetime
-from metrics import compute_img_metric
 import cv2
 from config_parser import config_parser
 from tqdm import tqdm, trange
@@ -123,11 +122,11 @@ def train(args):
             for arg in sorted(vars(args)):
                 attr = getattr(args, arg)
                 file.write('{} = {}\n'.format(arg, attr))
-        if args.config is not None:
+        if len(args.config) > 0:
             f = os.path.join(file_path, 'config.txt')
             with open(f, 'w') as file:
                 file.write(open(args.config, 'r').read())
-        if args.config1 is not None:
+        if len(args.config1) > 0:
             f = os.path.join(file_path, 'config1.txt')
             with open(f, 'w') as file:
                 file.write(open(args.config1, 'r').read())
@@ -250,6 +249,7 @@ def train(args):
     for pyr_i, (train_factor, hw, num_epoch) in enumerate(zip(pyr_factors, pyr_hw, pyr_num_epoch)):
         nerf.module.lod(train_factor)
         optimizer = nerf.module.get_optimizer(step=0)
+        torch.cuda.empty_cache()
         # generate dataset and optimizer
         dataset = MVVidPatchDataset(hw, videos,
                                     (args.patch_h_size, args.patch_w_size),

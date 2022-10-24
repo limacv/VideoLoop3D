@@ -1,0 +1,2 @@
+expname = dense_110pillar_f20_mse
+datadir = data/pillar720p

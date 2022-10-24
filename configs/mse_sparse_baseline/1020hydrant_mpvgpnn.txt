@@ -1,0 +1,4 @@
+expname = sparse_1020hydrant720p_f50_mse
+datadir = data/1020hydrant720p
+init_from = meshlogfinal_loopv2/1020hydrant720p_n098f2_rmlayer2_smth05_density002_loopmav2/epoch_0119.tar
+mpv_frm_num = 50

@@ -1,0 +1,20 @@
+gpu_num = 1
+# Dataset related
+prefix = /d1/scratch/PI/psander/data/VideoLoops
+expdir  = ablation
+factor = 2
+seed = 2
+model_type = MPMesh
+
+# mpi configuration, not important since we load from ckpt
+mpi_h_scale = 0.1
+mpi_w_scale = 0.1
+mpi_h_verts = 27
+mpi_w_verts = 48
+mpi_d = 32
+atlas_grid_h = 4
+atlas_size_scale = 1
+
+sparsity_loss_weight = 0.004
+rgb_smooth_loss_weight = 0.2
+a_smooth_loss_weight = 0.2

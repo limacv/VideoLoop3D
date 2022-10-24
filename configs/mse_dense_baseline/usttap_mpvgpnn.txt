@@ -1,0 +1,2 @@
+expname = dense_usttap_f20_mse
+datadir = data/usttap720p

@@ -1,0 +1,2 @@
+expname = dense_1020rock_f20_mse
+datadir = data/1020rock720p

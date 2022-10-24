@@ -1,0 +1,4 @@
+expname = sparse_usttap_f60_mse
+datadir = data/usttap720p
+init_from = meshlogfinal_loopv2/usttap720p_n095f15_rmlayer3_smth08_density002_loopmav2/epoch_0119.tar
+mpv_frm_num = 60

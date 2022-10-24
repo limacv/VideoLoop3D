@@ -1,8 +1,8 @@
-expname = 1020hydrant720p_n098f2_rmlayer2_smth05_density002_loopmav2
+expname = 1020hydrant720p_n099f5_rmlayer4_smth05_density002_loopmav2
 datadir = data/1020hydrant720p
-near_factor = 0.98
-far_factor = 2
-sparsify_rmfirstlayer = 2
+near_factor = 0.99
+far_factor = 5
+sparsify_rmfirstlayer = 1
 
 
 sparsity_loss_weight = 0.004

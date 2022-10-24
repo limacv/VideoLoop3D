@@ -12,7 +12,6 @@ from dataloader import load_mv_videos, poses_avg, load_llff_data
 from utils import *
 import shutil
 from datetime import datetime
-from metrics import compute_img_metric
 import cv2
 from tqdm import tqdm, trange
 from config_parser import config_parser

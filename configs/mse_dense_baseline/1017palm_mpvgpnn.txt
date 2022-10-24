@@ -1,0 +1,2 @@
+expname = dense_1017palm_f20_mse
+datadir = data/1017palm720p

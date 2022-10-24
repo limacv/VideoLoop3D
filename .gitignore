@@ -1,4 +1,5 @@
 *.pth
 *.xml
-/lpips/
+/evaluations/lpips/
 .idea
+/evaluations/c3d.pickle

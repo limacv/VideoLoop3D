@@ -1,0 +1,2 @@
+expname = dense_108fall2_f20_mse
+datadir = data/fall2720p

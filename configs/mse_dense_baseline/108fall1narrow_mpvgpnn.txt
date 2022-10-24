@@ -1,0 +1,3 @@
+expname = dense_108fall1narrow_f20_mse
+datadir = data/fall1narrow720p
+

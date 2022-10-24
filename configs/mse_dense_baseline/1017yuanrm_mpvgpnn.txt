@@ -1,0 +1,2 @@
+expname = dense_1017yuan_f20_mse
+datadir = data/1017yuan720p

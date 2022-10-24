@@ -1,7 +1,6 @@
 from skimage import metrics
-import torch
 import torch.hub
-from lpips.lpips import LPIPS
+from evaluations.lpips.lpips import LPIPS
 import os
 import numpy as np
 
