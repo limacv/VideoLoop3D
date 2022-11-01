@@ -1,2 +1,0 @@
-expname = dense_1020ustfall2_f20_mse
-datadir = data/1020ustfall2720p

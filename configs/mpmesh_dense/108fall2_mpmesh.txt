@@ -1,0 +1,10 @@
+expname = 108fall2_n09f15_rmlayer4_smth05_density002_loopmav2
+datadir = data/fall2720p
+near_factor = 0.90
+far_factor = 1.5
+
+sparsity_loss_weight = 0.004
+rgb_smooth_loss_weight = 0.5
+a_smooth_loss_weight = 0.5
+density_loss_weight = 0.02
+density_loss_epoch = 60

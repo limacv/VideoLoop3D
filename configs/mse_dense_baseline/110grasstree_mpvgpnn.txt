@@ -1,2 +1,0 @@
-expname = dense_110grasstree_f20_mse
-datadir = data/grasstree720p

@@ -1,0 +1,12 @@
+expname = 1017ustspring_n09f4_rmlayer1_smth02_density002_loopmav2
+datadir = data/1017ustspring720p
+near_factor = 0.90
+far_factor = 4
+sparsify_rmfirstlayer = 1
+sparsify_erode = 0
+
+sparsity_loss_weight = 0.004
+rgb_smooth_loss_weight = 0.5
+a_smooth_loss_weight = 0.5
+density_loss_weight = 0.02
+density_loss_epoch = 60

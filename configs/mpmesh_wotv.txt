@@ -1,0 +1,38 @@
+gpu_num = 1
+# Dataset related
+prefix = /d1/scratch/PI/psander/data/VideoLoops
+expdir  = meshlog_wotv
+factor = 2
+seed = 2
+model_type = MPMesh
+
+# mpi configuration
+vid2img_mode = dynamic
+learn_loop_mask
+mpi_h_scale = 1.6
+mpi_w_scale = 1.6
+mpi_h_verts = 36
+mpi_w_verts = 64
+mpi_d = 32
+atlas_grid_h = 4
+atlas_size_scale = 1
+
+# Training related
+sparsify_epoch = 119
+sparsify_alpha_thresh = 0.05
+sparsify_erode = 2
+N_iters = 140
+patch_h_size = 180
+patch_w_size = 320
+patch_h_stride = 90
+patch_w_stride = 160
+lrate = 0.05
+lrate_decay = 100
+rgb_mlp_type = direct
+rgb_activate = sigmoid
+alpha_activate = sigmoid
+
+i_img = 50
+i_print = 10
+i_weight = 60
+i_video = 20

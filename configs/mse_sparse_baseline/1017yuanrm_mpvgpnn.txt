@@ -1,4 +1,0 @@
-expname = sparse_1017yuan_f50_mse
-datadir = data/1017yuan720p
-init_from = meshlogfinal_loopv2/1017yuan720p_n095f4_rmlayer1_smth05_density002_loopmav2/epoch_0119.tar
-mpv_frm_num = 50

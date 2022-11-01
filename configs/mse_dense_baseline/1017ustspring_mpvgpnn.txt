@@ -1,2 +1,0 @@
-expname = dense_1017ustspring_f20_mse
-datadir = data/1017ustspring720p

@@ -1,2 +1,0 @@
-expname = dense_ustfallclose_f20_mse
-datadir = data/ustfallclose720p

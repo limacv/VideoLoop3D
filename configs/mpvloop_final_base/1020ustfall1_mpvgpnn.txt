@@ -1,0 +1,3 @@
+expname = loop_sparse_1020ustfall1_mse
+datadir = data/1020ustfall1720p_loop
+init_from = meshlogfinal_loopv2/1020ustfall1720p_n098f15_rmlayer1_smth05_density002_loopmav2/epoch_0119.tar

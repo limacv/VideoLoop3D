@@ -1,4 +1,0 @@
-expname = sparse_108fall4_f50_mse
-datadir = data/fall4720p
-init_from = meshlogfinal_loopv2/108fall4_n095f12_rmlayer2_smth05_density002_loopmav2/epoch_0119.tar
-mpv_frm_num = 50

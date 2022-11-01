@@ -152,9 +152,9 @@ class MPMeshVid(nn.Module):
             tileh, tilew = atlas_h // self.atlas_grid_h, atlas_w // self.atlas_grid_w
             fulltileh, fulltilew = self.atlas_full_h // self.atlas_grid_h, self.atlas_full_w // self.atlas_grid_w
             newtileh, newtilew = max(int(fulltileh * factor), 2), max(int(fulltilew * factor), 2)
-            if newtileh == tileh and newtilew == tilew:
-                print(f"MPV.lod:: no need to resize")
-                return
+            # if newtileh == tileh and newtilew == tilew:
+            #     print(f"MPV.lod:: no need to resize")
+            #     return
             print(f"MPV.lod:: Sparse! Resizing the tiles from {(tileh, tilew)} to {(newtileh, newtilew)}")
 
             def resize_atlas(a_, gh_, gw_):
@@ -237,20 +237,21 @@ class MPMeshVid(nn.Module):
 
     def init_from_mpi(self, state_dict):
         self._verts.data = state_dict['_verts'].type_as(self._verts)
-        self.uvs.data = state_dict['uvs'].type_as(self.uvs)
-        self.atlas.data = state_dict['atlas'].type_as(self.atlas)
-        self.uvfaces.data = state_dict['uvfaces'].type_as(self.uvfaces)
-        self.faces.data = state_dict['faces'].type_as(self.faces)
         self.ref_extrin.data = state_dict['ref_extrin'].type_as(self.ref_extrin)
         self.ref_intrin.data = state_dict['ref_intrin'].type_as(self.ref_intrin)
         self.planedepth.data = state_dict['planedepth'].type_as(self.planedepth)
-        self.is_sparse = state_dict["self.is_sparse"]
-        self.atlas_full_w = state_dict["self.atlas_full_w"]
-        self.atlas_full_h = state_dict["self.atlas_full_h"]
-        self.atlas_grid_h = state_dict["self.atlas_grid_h"]
-        self.atlas_grid_w = state_dict["self.atlas_grid_w"]
 
         if "self.has_dyn" in state_dict.keys():
+            self.uvs.data = state_dict['uvs'].type_as(self.uvs)
+            self.atlas.data = state_dict['atlas'].type_as(self.atlas)
+            self.uvfaces.data = state_dict['uvfaces'].type_as(self.uvfaces)
+            self.faces.data = state_dict['faces'].type_as(self.faces)
+            self.is_sparse = state_dict["self.is_sparse"]
+            self.atlas_full_w = state_dict["self.atlas_full_w"]
+            self.atlas_full_h = state_dict["self.atlas_full_h"]
+            self.atlas_grid_h = state_dict["self.atlas_grid_h"]
+            self.atlas_grid_w = state_dict["self.atlas_grid_w"]
+
             self.has_dyn = state_dict["self.has_dyn"]
             self.atlas_full_dyn_w = state_dict["self.atlas_full_dyn_w"]
             self.atlas_full_dyn_h = state_dict["self.atlas_full_dyn_h"]
@@ -260,6 +261,32 @@ class MPMeshVid(nn.Module):
             self.uvfaces_dyn.data = state_dict['uvfaces_dyn'].type_as(self.uvfaces)
             self.faces_dyn.data = state_dict['faces_dyn'].type_as(self.faces)
             atlas_dyn = state_dict['atlas_dyn'].type_as(self.atlas)
+            atlas_dyn = atlas_dyn.expand(len(self.atlas_dyn), -1, -1, -1)
+            self.atlas_dyn.data = atlas_dyn
+            if self.frm_num != len(self.atlas_dyn):
+                print(f"Warnining, inconsistent frame number detected, "
+                      f"change from {self.frm_num} to {len(self.atlas_dyn)}")
+                self.frm_num = len(self.atlas_dyn)
+
+        else:  # load static as dynamic, create dummy for static
+            self.uvs.data = state_dict['uvs'][:0].clone().type_as(self.uvs)
+            self.atlas.data = state_dict['atlas'][:, :, :1, :1].type_as(self.atlas)
+            self.uvfaces.data = state_dict['uvfaces'][:0].clone().type_as(self.uvfaces)
+            self.faces.data = state_dict['faces'][:0].clone().type_as(self.faces)
+            self.is_sparse = state_dict["self.is_sparse"]
+            self.atlas_full_w = state_dict["self.atlas_full_w"]
+            self.atlas_full_h = state_dict["self.atlas_full_h"]
+            self.atlas_grid_h = state_dict["self.atlas_grid_h"]
+            self.atlas_grid_w = state_dict["self.atlas_grid_w"]
+
+            self.atlas_full_dyn_w = state_dict["self.atlas_full_w"]
+            self.atlas_full_dyn_h = state_dict["self.atlas_full_h"]
+            self.atlas_grid_dyn_h = state_dict["self.atlas_grid_h"]
+            self.atlas_grid_dyn_w = state_dict["self.atlas_grid_w"]
+            self.uvs_dyn.data = state_dict['uvs'].type_as(self.uvs)
+            self.uvfaces_dyn.data = state_dict['uvfaces'].type_as(self.uvfaces)
+            self.faces_dyn.data = state_dict['faces'].type_as(self.faces)
+            atlas_dyn = state_dict['atlas'].type_as(self.atlas)
             atlas_dyn = atlas_dyn.expand(len(self.atlas_dyn), -1, -1, -1)
             self.atlas_dyn.data = atlas_dyn
 

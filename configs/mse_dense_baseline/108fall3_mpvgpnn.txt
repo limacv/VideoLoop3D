@@ -1,2 +1,0 @@
-expname = dense_108fall3_f20_mse
-datadir = data/fall3720p

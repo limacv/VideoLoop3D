@@ -1,0 +1,12 @@
+expname = 1020ustfall2720p_n075f13_rmlayer4_smth05_density002_wotv
+datadir = data/1020ustfall2720p
+near_factor = 0.75
+far_factor = 1.3
+sparsify_rmfirstlayer = 4
+
+
+sparsity_loss_weight = 0.004
+rgb_smooth_loss_weight = 0
+a_smooth_loss_weight = 0
+density_loss_weight = 0.02
+density_loss_epoch = 60

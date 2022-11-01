@@ -18,7 +18,7 @@ from config_parser import config_parser
 from tqdm import tqdm, trange
 from copy import deepcopy
 from evaluations.SVFID import svfid
-from evaluations.LPIPS import compute_lpips
+from evaluations.LPIPS import compute_lpips, compute_lpips_slidewindow
 from evaluations.NNMSE import compute_nnerr
 
 
@@ -99,6 +99,11 @@ def evaluate(args):
         # ########################
         # Computing metrics. gt, pred are videos F x H x W x 3, in (0, 255), rgb
         # ########################
+        # crop
+        # crop = 30
+        # videos = [vid[:, crop:-crop, crop:-crop] for vid in videos]
+        # ours_rgb = [vid[:, crop:-crop, crop:-crop] for vid in ours_rgb]
+
         torch.cuda.empty_cache()
         fids = []
         print("computing svfid error")
@@ -130,6 +135,7 @@ def evaluate(args):
 
         torch.cuda.empty_cache()
         lpips = []
+        lpips_sw = []
         print("computing lpips error")
         for viewi in trange(V):
             gt = videos[viewi]
@@ -137,7 +143,9 @@ def evaluate(args):
             gt = torch.tensor(np.array(gt)).cuda().float()
             pred = torch.tensor(np.array(pred)).cuda().float()
             lpip = compute_lpips(pred, gt)
+            # lpipsw = compute_lpips_slidewindow(pred, gt)
             lpips.append(lpip)
+            # lpips_sw.append(lpipsw)
 
         torch.cuda.empty_cache()
         patch_sizes = [5, 11, 17]
@@ -190,7 +198,7 @@ def evaluate(args):
 
             forwards = forwards / V
             backwards = backwards / V
-            f.write(f"ours_{dataname}, ")
+            f.write(f"{dataname}, ")
             f.write(", ".join(map(str,
                                   [forwards[-1], backwards[-1],
                                    mean(dyns), mean(lpips), mean(fids)])))

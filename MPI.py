@@ -359,6 +359,8 @@ class MPMesh(nn.Module):
         max_ratio = 4  # the max value of width / height
 
         def get_hw(n):
+            if n == 0:
+                return 0, 0, 0
             n_min = int(np.sqrt(n / max_ratio))
             n_max = int(np.sqrt(n))
             n_try = np.arange(n_min, n_max)
@@ -502,6 +504,8 @@ class MPMesh(nn.Module):
         ray_direction = ray_direction / ray_direction.norm(dim=-1, keepdim=True)
 
         def render_masked_rgba(mask_, atlas_, uvs_):
+            if len(uvs_) == 0:
+                return torch.zeros(0, 4).type_as(atlas_)
             mask_flat_ = mask_.reshape(-1)
             ray_direction_ = ray_direction[..., None, :].expand(mask_.shape + (3,))
             ray_d_ = ray_direction_.reshape(-1, 3)[mask_flat_, :]

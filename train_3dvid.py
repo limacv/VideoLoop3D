@@ -79,7 +79,7 @@ def train(args):
     videos, FPS, poses, intrins, bds, render_poses, render_intrins = \
         load_mv_videos(basedir=datadir,
                        factor=args.factor,
-                           bd_factor=(args.near_factor, args.far_factor),
+                       bd_factor=(args.near_factor, args.far_factor),
                        recenter=True)
 
     H, W = videos[0][0].shape[0:2]

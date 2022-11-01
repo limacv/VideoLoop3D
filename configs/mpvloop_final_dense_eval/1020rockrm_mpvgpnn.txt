@@ -1,0 +1,3 @@
+expname = loop_dense_1020rock_mse
+datadir = data/1020rock720p
+init_from = meshlog_dense/1020rock720p_n098f3_rmlayer2_smth05_density002_loopmav2_athr002/epoch_0119.tar

@@ -14,7 +14,3 @@ mpi_w_verts = 48
 mpi_d = 32
 atlas_grid_h = 4
 atlas_size_scale = 1
-
-sparsity_loss_weight = 0.004
-rgb_smooth_loss_weight = 0.2
-a_smooth_loss_weight = 0.2

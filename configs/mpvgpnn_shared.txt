@@ -27,7 +27,7 @@ rgb_mlp_type = direct
 rgb_activate = sigmoid
 alpha_activate = sigmoid
 
-sparsity_loss_weight = 0.004
+sparsity_loss_weight = 0
 rgb_smooth_loss_weight = 0.2
 a_smooth_loss_weight = 0.2
 

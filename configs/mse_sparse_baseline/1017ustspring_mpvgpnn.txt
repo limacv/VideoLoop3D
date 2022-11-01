@@ -1,4 +1,0 @@
-expname = sparse_1017ustspring_f50_mse
-datadir = data/1017ustspring720p
-init_from = meshlogfinal_loopv2/1017ustspring_n09f4_rmlayer1_smth02_density002_loopmav2/epoch_0119.tar
-mpv_frm_num = 50

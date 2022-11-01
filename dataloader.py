@@ -53,7 +53,8 @@ def _load_data(basedir, factor=None, width=None, height=None, load_imgs=True):
     return poses, bds, imgs
 
 
-def load_llff_data(basedir, factor=8, recenter=True, bd_factor=(1, 1), spherify=False, path_epi=False, load_img=True):
+def load_llff_data(basedir, factor=8, recenter=True, bd_factor=(1, 1), spherify=False, path_epi=False,
+                   load_img=True, render_frm=120):
     poses, bds, imgs = _load_data(basedir, factor=factor, load_imgs=load_img)
     # factor=8 downsamples original imgs by 8x
     print('Loaded', basedir, bds.min(), bds.max())
@@ -104,7 +105,7 @@ def load_llff_data(basedir, factor=8, recenter=True, bd_factor=(1, 1), spherify=
         tt = poses[:, :3, 3]  # ptstocam(poses[:3,3,:].T, c2w).T
         rads = np.percentile(np.abs(tt), 90, 0)
         c2w_path = c2w
-        N_views = 120
+        N_views = render_frm
         N_rots = 2
         # Generate poses for spiral path
         # rads = [0.7, 0.2, 0.7]
@@ -132,10 +133,11 @@ def load_llff_data(basedir, factor=8, recenter=True, bd_factor=(1, 1), spherify=
     return imgs, poses, intrins, bds, render_poses, render_intrins
 
 
-def load_mv_videos(basedir, factor=1, recenter=True, bd_factor=(1, 1)):
+def load_mv_videos(basedir, factor=1, recenter=True, bd_factor=(1, 1), render_frm=120):
     _, poses, intrins, bds, render_poses, render_intrins = load_llff_data(basedir, factor, recenter,
                                                                           bd_factor=bd_factor,
-                                                                          load_img=False)
+                                                                          load_img=False,
+                                                                          render_frm=render_frm)
     videos_path = sorted(glob.glob(basedir + f"/videos_{factor}/*"))
     videos = [imageio.mimread(vp, memtest=False) for vp in videos_path]
     cap = cv2.VideoCapture(videos_path[0])
