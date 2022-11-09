@@ -2,7 +2,7 @@ gpu_num = 1
 # Dataset related
 prefix = /d1/scratch/PI/psander/data/VideoLoops
 expname_postfix = _wopyr
-expdir  = log_wopyr
+expdir  = log1_wopyr
 factor = 2
 seed = 2
 model_type = MPMesh
@@ -34,7 +34,7 @@ a_smooth_loss_weight = 0.2
 
 i_img = 20
 i_print = 10
-i_weight = 50
+i_weight = 75
 i_video = 50
 
 # mpv configuration
@@ -42,3 +42,5 @@ pyr_minimal_dim = 360
 pyr_num_epoch = 150
 pyr_factor = 0.75
 init_std = 0.02
+
+mpv_isloop

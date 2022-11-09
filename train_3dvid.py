@@ -84,7 +84,16 @@ def train(args):
 
     H, W = videos[0][0].shape[0:2]
     V = len(videos)
+
     print('Loaded llff', V, H, W, poses.shape, intrins.shape, render_poses.shape, bds.shape)
+    test_view = args.test_view_idx
+    test_view = list(map(int, test_view.split(','))) if len(test_view) > 0 else []
+    train_view = sorted(list(set(range(V)) - set(test_view)))
+    # filter out test view
+    videos = [videos[train_i] for train_i in train_view]
+    poses = poses[train_view]
+    intrins = intrins[train_view]
+    print(f'Training view: {train_view}')
 
     ref_pose = poses_avg(poses)[:, :4]
     ref_extrin = pose2extrin_np(ref_pose)
@@ -181,6 +190,7 @@ def train(args):
     ref_idxs = list(map(int, args.loss_ref_idx.split(',')))
     for ref_idx in ref_idxs:
         loss_cfgs[ref_idx] = loss_config_ref
+    loss_cfgs = [loss_cfgs[i] for i in train_view]
 
     epoch_total_step = 0
     iter_total_step = 0

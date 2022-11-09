@@ -3,10 +3,10 @@ datadir = data/fall4720p
 near_factor = 0.95
 far_factor = 1.2
 sparsify_rmfirstlayer = 2
-sparsify_alpha_thresh = 0.02
+sparsify_alpha_thresh = 0.05
 
 sparsity_loss_weight = 0.004
-rgb_smooth_loss_weight = 0.5
+rgb_smooth_loss_weight = 0.2
 a_smooth_loss_weight = 0.5
 density_loss_weight = 0.02
 density_loss_epoch = 60

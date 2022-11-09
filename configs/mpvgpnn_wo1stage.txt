@@ -2,7 +2,7 @@ gpu_num = 1
 # Dataset related
 prefix = /d1/scratch/PI/psander/data/VideoLoops
 expname_postfix = _wo1stage
-expdir  = log_wo1stage
+expdir  = log1_wo1stage
 factor = 2
 seed = 2
 model_type = MPMesh
@@ -42,3 +42,5 @@ pyr_minimal_dim = 65
 pyr_num_epoch = 50
 pyr_factor = 0.75
 init_std = 0.02
+
+mpv_isloop

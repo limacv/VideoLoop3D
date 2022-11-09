@@ -1,3 +1,0 @@
-expname = loop_dense_1017yuan_mse
-datadir = data/1017yuan720p
-init_from = meshlog_dense/1017yuan720p_n095f4_rmlayer1_smth05_density002_loopmav2/epoch_0119.tar

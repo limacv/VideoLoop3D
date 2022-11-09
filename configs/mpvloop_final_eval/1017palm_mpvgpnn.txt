@@ -1,3 +1,0 @@
-expname = loop_sparse_1017palm_mse
-datadir = data/1017palm720p
-init_from = meshlogfinal_loopv2/1017palm_n098f3_rmlayer1_smth05_density002_loopmav2/epoch_0119.tar

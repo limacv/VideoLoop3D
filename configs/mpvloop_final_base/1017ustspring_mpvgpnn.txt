@@ -1,3 +1,0 @@
-expname = loop_sparse_1017ustspring_mse
-datadir = data/1017ustspring720p_loop
-init_from = meshlogfinal_loopv2/1017ustspring_n09f4_rmlayer1_smth02_density002_loopmav2/epoch_0119.tar

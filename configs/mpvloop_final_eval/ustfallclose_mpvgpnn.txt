@@ -1,3 +1,0 @@
-expname = loop_sparse_ustfallclose_mse
-datadir = data/ustfallclose720p
-init_from = meshlogfinal_loopv2/ustfallclose_n1f12_rmlayer0_smth05_density002_loopmav2/epoch_0119.tar

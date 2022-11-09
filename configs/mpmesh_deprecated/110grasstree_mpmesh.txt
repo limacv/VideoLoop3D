@@ -1,9 +1,0 @@
-expname = 110grasstree_n095f5_rmlayer_smth05
-datadir = data/grasstree720p
-near_factor = 0.95
-far_factor = 5
-sparsify_rmfirstlayer = 1
-
-sparsity_loss_weight = 0.004
-rgb_smooth_loss_weight = 0.5
-a_smooth_loss_weight = 0.5

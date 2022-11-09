@@ -1,0 +1,46 @@
+gpu_num = 1
+# Dataset related
+prefix = /d1/scratch/PI/psander/data/VideoLoops
+expname_postfix = _abspa
+expdir  = log1_abspa
+factor = 2
+seed = 2
+model_type = MPMesh
+
+# mpi configuration, not important since we load from ckpt
+mpi_h_scale = 1.1
+mpi_w_scale = 1.1
+mpi_h_verts = 27
+mpi_w_verts = 48
+mpi_d = 32
+atlas_grid_h = 4
+atlas_size_scale = 1
+
+# Training related
+patch_h_size = 180
+patch_h_stride = 90
+patch_w_size = 320
+patch_w_stride = 160
+lrate = 0.5
+lrate_decay = 100
+lrate_adaptive
+rgb_mlp_type = direct
+rgb_activate = sigmoid
+alpha_activate = sigmoid
+
+sparsity_loss_weight = 0
+rgb_smooth_loss_weight = 0.2
+a_smooth_loss_weight = 0.2
+
+i_img = 20
+i_print = 10
+i_weight = 50
+i_video = 50
+
+# mpv configuration
+pyr_minimal_dim = 65
+pyr_num_epoch = 50
+pyr_factor = 0.75
+init_std = 0.02
+
+mpv_isloop

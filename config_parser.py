@@ -12,6 +12,8 @@ def config_parser():
                         help='experiment name')
     parser.add_argument("--expname_postfix", type=str, default='',
                         help='experiment name')
+    parser.add_argument("--test_view_idx", type=str, default='',
+                        help='a,b,c swd_alpha = ref if view==swd_alpha_reference_viewidx else other')
 
     parser.add_argument("--prefix", type=str, default='',
                         help='input data directory')

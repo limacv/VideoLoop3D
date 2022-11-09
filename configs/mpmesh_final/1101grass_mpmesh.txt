@@ -1,0 +1,13 @@
+expname = 1101grass_n099f25_rmlayer1_smth05_density002_loopmav2
+datadir = data/1101grass720p
+near_factor = 0.99
+far_factor = 2.5
+sparsify_rmfirstlayer = 1
+
+
+sparsity_loss_weight = 0.004
+rgb_smooth_loss_weight = 0.2
+a_smooth_loss_weight = 0.5
+density_loss_weight = 0.02
+density_loss_epoch = 60
+

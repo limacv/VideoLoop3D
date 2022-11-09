@@ -1,0 +1,27 @@
+expname = sparse_1101ustyard_f50_v36A0PtStB341_otherA100PtSt3321
+datadir = data/1101ustyard720p
+init_from = meshlog1final/1101ustyard_n11f2_rmlayer0_smth05_density002_loopmav2/epoch_0119.tar
+mpv_frm_num = 50
+test_view_idx = 4
+
+loss_ref_idx = 3,6
+swd_macro_block = 65
+swd_loss_gain_ref = 3.5
+loss_name_ref = gpnn_lm
+swd_alpha_ref = 0
+swd_patch_size_ref = 11
+swd_patcht_size_ref = 3
+swd_stride_ref = 4
+swd_stridet_ref = 1
+swd_dist_fn_ref = mse
+swd_rou_ref = -2
+swd_scaling_ref = 0.1
+loss_name = gpnn_lm
+swd_alpha = 10000
+swd_patch_size = 3
+swd_patcht_size = 3
+swd_stride = 2
+swd_stridet = 1
+swd_dist_fn = mse
+swd_rou = -2
+swd_scaling = 0.1

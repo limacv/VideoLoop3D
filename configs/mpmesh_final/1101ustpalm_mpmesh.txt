@@ -1,0 +1,12 @@
+expname = 1101ustpalm_n09f4_rmlayer2_smth05_density002_loopmav2
+datadir = data/1101ustpalm720p
+near_factor = 0.9
+far_factor = 4
+sparsify_rmfirstlayer = 2
+
+
+sparsity_loss_weight = 0.004
+rgb_smooth_loss_weight = 0.2
+a_smooth_loss_weight = 0.5
+density_loss_weight = 0.02
+density_loss_epoch = 60

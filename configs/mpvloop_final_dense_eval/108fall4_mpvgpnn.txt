@@ -1,3 +1,0 @@
-expname = loop_dense_108fall4_mse
-datadir = data/fall4720p
-init_from = meshlog_dense/108fall4_n095f12_rmlayer2_smth05_density002_loopmav2/epoch_0119.tar

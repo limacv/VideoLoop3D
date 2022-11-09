@@ -1,9 +1,0 @@
-expname = 109fence_n095f10_rmlayer_smth05
-datadir = data/fence720p
-near_factor = 0.95
-far_factor = 10
-sparsify_rmfirstlayer = 1
-
-sparsity_loss_weight = 0.004
-rgb_smooth_loss_weight = 0.5
-a_smooth_loss_weight = 0.5

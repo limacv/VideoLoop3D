@@ -1,0 +1,4 @@
+expname = loop_sparse_1101grass_mse
+datadir = data/1101grass720p_loop
+init_from = meshlog1final/1101grass_n099f25_rmlayer1_smth05_density002_loopmav2/epoch_0119.tar
+test_view_idx = 5

@@ -1,8 +1,8 @@
-expname = sparse_110grasstree_f50_v17A0PtStB341_otherA100PtSt3321_loopv2
+expname = dense_110grasstree_f16_v17A0PtStB341_otherA100PtSt3321_loopv2
 datadir = data/grasstree720p
-init_from = meshlog_dense/110grasstree_n095f5_rmlayer2_smth05_density002_loopmav2/epoch_0119.tar
+init_from = meshlog1_dense/110grasstree_n095f5_rmlayer2_smth05_density002_loopmav2/epoch_0119.tar
 mpv_frm_num = 16
-mpv_isloop
+test_view_idx = 4
 
 loss_ref_idx = 1,7
 swd_macro_block = 65

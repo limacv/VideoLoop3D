@@ -1,3 +1,4 @@
 expname = loop_dense_110grasstree_mse
 datadir = data/grasstree720p_loop
-init_from = meshlog_dense/110grasstree_n095f5_rmlayer2_smth05_density002_loopmav2/epoch_0119.tar
+init_from = meshlog1_dense/110grasstree_n095f5_rmlayer2_smth05_density002_loopmav2/epoch_0119.tar
+test_view_idx = 4

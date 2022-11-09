@@ -30,6 +30,12 @@ def evaluate(args):
 
     expname = args.expname + args.expname_postfix
     print(f"Evaluating: {expname}")
+    args.datadir = args.datadir.rstrip('/\\')
+    if args.datadir.endswith("_loop"):
+        print(f"Warning!!! Detect data pointing to the looping dataset, "
+              f"will change from {args.datadir} to {args.datadir[:-5]}")
+        args.datadir = args.datadir[:-5]
+
     datadir = os.path.join(args.prefix, args.datadir)
     expdir = os.path.join(args.prefix, args.expdir)
     videos, FPS, poses, intrins, bds, render_poses, render_intrins = \
@@ -39,8 +45,16 @@ def evaluate(args):
                        recenter=True)
 
     H, W = videos[0][0].shape[0:2]
+    print('Loaded llff', H, W, poses.shape, intrins.shape, render_poses.shape, bds.shape)
+    test_view = args.test_view_idx
+    test_view = list(map(int, test_view.split(','))) if len(test_view) > 0 else list(range(V))
+    # filter out test view
+    videos = [videos[train_i] for train_i in test_view]
+    videos = [np.array(vid) for vid in videos]
+    poses = poses[test_view]
+    intrins = intrins[test_view]
+    print(f'Test view: {test_view}')
     V = len(videos)
-    print('Loaded llff', V, H, W, poses.shape, intrins.shape, render_poses.shape, bds.shape)
 
     ref_pose = poses_avg(poses)[:, :4]
     ref_extrin = pose2extrin_np(ref_pose)
@@ -99,28 +113,27 @@ def evaluate(args):
         # ########################
         # Computing metrics. gt, pred are videos F x H x W x 3, in (0, 255), rgb
         # ########################
-        # crop
-        # crop = 30
-        # videos = [vid[:, crop:-crop, crop:-crop] for vid in videos]
-        # ours_rgb = [vid[:, crop:-crop, crop:-crop] for vid in ours_rgb]
+        crop = 40
+        videos = [vid[:, crop:-crop, crop:-crop] for vid in videos]
+        ours_rgb = [vid[:, crop:-crop, crop:-crop] for vid in ours_rgb]
 
-        torch.cuda.empty_cache()
-        fids = []
-        print("computing svfid error")
-        for viewi in trange(V):
-            gt = videos[viewi]
-            pred = ours_rgb[viewi]
-            gt = [cv2.resize(gt_[12:12 + 336, 152: 152 + 336], (112, 112)) for gt_ in gt]
-            pred = [cv2.resize(p_[12:12 + 336, 152: 152 + 336], (112, 112)) for p_ in pred]
-            gt = torch.tensor(np.array(gt)).cuda().float() / 255
-            pred = torch.tensor(np.array(pred)).cuda().float() / 255
-            try:
-                fid = svfid(gt, pred)
-            except Exception as e:
-                print(e)
-                fid = -1
-
-            fids.append(fid)
+        # torch.cuda.empty_cache()
+        # fids = []
+        # print("computing svfid error")
+        # for viewi in trange(V):
+        #     gt = videos[viewi]
+        #     pred = ours_rgb[viewi]
+        #     gt = [cv2.resize(gt_[12:12 + 336, 152: 152 + 336], (112, 112)) for gt_ in gt]
+        #     pred = [cv2.resize(p_[12:12 + 336, 152: 152 + 336], (112, 112)) for p_ in pred]
+        #     gt = torch.tensor(np.array(gt)).cuda().float() / 255
+        #     pred = torch.tensor(np.array(pred)).cuda().float() / 255
+        #     try:
+        #         fid = svfid(gt, pred)
+        #     except Exception as e:
+        #         print(e)
+        #         fid = -1
+        #
+        #     fids.append(fid)
 
         torch.cuda.empty_cache()
         dyns = []
@@ -143,17 +156,34 @@ def evaluate(args):
             gt = torch.tensor(np.array(gt)).cuda().float()
             pred = torch.tensor(np.array(pred)).cuda().float()
             lpip = compute_lpips(pred, gt)
-            # lpipsw = compute_lpips_slidewindow(pred, gt)
+            lpipsw = compute_lpips_slidewindow(pred, gt)
             lpips.append(lpip)
-            # lpips_sw.append(lpipsw)
+            lpips_sw.append(lpipsw)
 
-        torch.cuda.empty_cache()
         patch_sizes = [5, 11, 17]
         stride_sizes = [2, 4, 6]
-        patcht_sizes = [5, 5, 3]
+        patcht_sizes = [7, 5, 3]
         stridet_sizes = [1, 1, 1]
+        torch.cuda.empty_cache()
+        loop_qualitys = []
+        print("computing Loop Quality")
+        for viewi in trange(V):
+            gt = videos[viewi]
+            pred = ours_rgb[viewi]
+            gt = torch.tensor(np.array(gt)).cuda().float().permute(3, 0, 1, 2)[None]
+            pred = torch.tensor(np.array(pred)).cuda().float().permute(3, 0, 1, 2)[None]
 
-        nnmses_consistency = []
+            loop_quality = []
+            for i, (psz, ssz, pszt, sszt) in enumerate(zip(patch_sizes, stride_sizes, patcht_sizes, stridet_sizes)):
+                pred_seam = torch.cat([
+                    pred[:, :, -pszt + 1:], pred[:, :, :pszt - 1]
+                ], dim=2)
+                loop_quality.append(compute_nnerr(pred_seam, gt, psz, ssz, pszt, sszt))
+
+            loop_qualitys.append(loop_quality)
+
+        torch.cuda.empty_cache()
+        nnmses_complete = []
         nnmses_coherent = []
         print("computing NN error")
         for viewi in trange(V):
@@ -162,50 +192,59 @@ def evaluate(args):
             gt = torch.tensor(np.array(gt)).cuda().float().permute(3, 0, 1, 2)[None]
             pred = torch.tensor(np.array(pred)).cuda().float().permute(3, 0, 1, 2)[None]
 
-            consistency, coherent = [], []
+            complete, coherent = [], []
             for i, (psz, ssz, pszt, sszt) in enumerate(zip(patch_sizes, stride_sizes, patcht_sizes, stridet_sizes)):
-                consistency.append(compute_nnerr(gt, pred, psz, ssz, pszt, sszt))
+                complete.append(compute_nnerr(gt, pred, psz, ssz, pszt, sszt))
                 coherent.append(compute_nnerr(pred, gt, psz, ssz, pszt, sszt))
 
-            nnmses_consistency.append(consistency)  # forward
+            nnmses_complete.append(complete)  # forward
             nnmses_coherent.append(coherent)  # backward
 
         mean = lambda x: sum(x) / len(x)
-        names = ["name", "nnf", "nnb", "dyn", "lpips", "fids"] + \
+        names = ["name", "nnf", "nnb", "dyn", "lpips", "lpips_sw", "loop"] + \
                 [f"nnf_p{p}s{s}pt{pt}st{st}" for p, s, pt, st in zip(patch_sizes, stride_sizes, patcht_sizes, stridet_sizes)] + \
-                [f"nnb_p{p}s{s}pt{pt}st{st}" for p, s, pt, st in zip(patch_sizes, stride_sizes, patcht_sizes, stridet_sizes)]
+                [f"nnb_p{p}s{s}pt{pt}st{st}" for p, s, pt, st in zip(patch_sizes, stride_sizes, patcht_sizes, stridet_sizes)] + \
+                [f"loop_p{p}s{s}pt{pt}st{st}" for p, s, pt, st in zip(patch_sizes, stride_sizes, patcht_sizes, stridet_sizes)]
         with open(moviebase + "metrics.txt", 'w') as f:
             f.write(", ".join(names) + "\n")
             dataname = os.path.basename(datadir)
 
             forwards = np.zeros(len(patch_sizes) + 1)
             backwards = np.zeros(len(patch_sizes) + 1)
+            loops = np.zeros(len(patch_sizes) + 1)
             for viewi in range(V):
                 f.write(f"{dataname}_view{viewi}, ")
                 f.write(", ".join(map(str,
-                                      [mean(nnmses_consistency[viewi]), mean(nnmses_coherent[viewi]),
-                                       dyns[viewi], lpips[viewi], fids[viewi]])))
+                                      [mean(nnmses_complete[viewi]), mean(nnmses_coherent[viewi]),
+                                       dyns[viewi], lpips[viewi], lpips_sw[viewi], mean(loop_qualitys[viewi])])))
                 f.write(", ")
-                f.write(", ".join(map(str, nnmses_consistency[viewi])))
+                f.write(", ".join(map(str, nnmses_complete[viewi])))
                 f.write(", ")
                 f.write(", ".join(map(str, nnmses_coherent[viewi])))
+                f.write(", ")
+                f.write(", ".join(map(str, loop_qualitys[viewi])))
                 f.write("\n")
 
-                forwards[:len(patch_sizes)] += nnmses_consistency[viewi]
-                forwards[-1] += mean(nnmses_consistency[viewi])
+                forwards[:len(patch_sizes)] += nnmses_complete[viewi]
+                forwards[-1] += mean(nnmses_complete[viewi])
                 backwards[:len(patch_sizes)] += nnmses_coherent[viewi]
                 backwards[-1] += mean(nnmses_coherent[viewi])
+                loops[:len(patch_sizes)] += loop_qualitys[viewi]
+                loops[-1] += mean(loop_qualitys[viewi])
 
             forwards = forwards / V
             backwards = backwards / V
+            loops = loops / V
             f.write(f"{dataname}, ")
             f.write(", ".join(map(str,
                                   [forwards[-1], backwards[-1],
-                                   mean(dyns), mean(lpips), mean(fids)])))
+                                   mean(dyns), mean(lpips), mean(lpips_sw), loops[-1]])))
             f.write(", ")
             f.write(", ".join(map(str, forwards[:-1].tolist())))
             f.write(", ")
             f.write(", ".join(map(str, backwards[:-1].tolist())))
+            f.write(", ")
+            f.write(", ".join(map(str, loops[:-1].tolist())))
             f.write("\n")
 
 

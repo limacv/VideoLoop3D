@@ -1,3 +1,0 @@
-expname = loop_dense_1020hydrant720p_loop_mse
-datadir = data/1020hydrant720p
-init_from = meshlog_dense/1020hydrant720p_n099f5_rmlayer4_smth05_density002_loopmav2/epoch_0119.tar

@@ -1,8 +1,8 @@
 expname = sparse_1020ustfall2_f50_v05A0PtStB341_otherA100PtSt3321
 datadir = data/1020ustfall2720p
-init_from = meshlogfinal_loopv2/1020ustfall2720p_n075f13_rmlayer4_smth05_density002_loopmav2/epoch_0119.tar
+init_from = meshlog1final/1020ustfall2720p_n075f13_rmlayer4_smth05_density002_loopmav2/epoch_0119.tar
 mpv_frm_num = 50
-mpv_isloop
+test_view_idx = 1
 
 loss_ref_idx = 0,5
 swd_macro_block = 65

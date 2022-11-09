@@ -39,12 +39,13 @@ def save_obj_with_vcolor(file, verts_colors, faces, uvs, uvfaces):
         f.write("\n")
 
 
-def export_mpv_repr(out_root, cfg_file, cfg_file1, prefix="D:\\MSI_NB\\source\\data\\VideoLoops"):
+def export_mpv_repr(cfg_file, cfg_file1, prefix="D:\\MSI_NB\\source\\data\\VideoLoops"):
     from config_parser import config_parser
     parser = config_parser()
     args = parser.parse_args(["--config", cfg_file, "--config1", cfg_file1])
 
-    outpath = os.path.join(out_root, args.expname)
+    expname = args.expname + args.expname_postfix
+    outpath = os.path.join(prefix, "meshes", expname)
     os.makedirs(outpath, exist_ok=True)
 
     data_dir = os.path.join(prefix, args.datadir)
@@ -82,7 +83,7 @@ def export_mpv_repr(out_root, cfg_file, cfg_file1, prefix="D:\\MSI_NB\\source\\d
         f.write(jsonobj)
 
     # saving others
-    ckpt_file = os.path.join(prefix, "logfinal", args.expname, "l5_epoch_0049.tar")
+    ckpt_file = os.path.join(prefix, args.expdir, expname, "l5_epoch_0049.tar")
     state_dict = torch.load(ckpt_file)
     state_dict = state_dict['network_state_dict']
 
@@ -163,8 +164,34 @@ def export_mpv_repr(out_root, cfg_file, cfg_file1, prefix="D:\\MSI_NB\\source\\d
 
 if __name__ == "__main__":
     export_mpv_repr(
-        "D:\\MSI_NB\\source\\data\\VideoLoops\\meshes",
-        "configs/mpvgpnn_shared.txt",
-        "configs/mpvgpnn_final/108fall1narrow_mpvgpnn.txt",
-    )
+            "configs/mpvgpnn_wospa.txt",
+            f"configs/mpvgpnn_final_base/108fall4_mpvgpnn.txt",
+            "/d1/scratch/PI/psander/data/VideoLoops",
+        )
+    # cfg1s = [
+    #     "108fall1narrow_mpvgpnn",
+    #     "108fall2_mpvgpnn",
+    #     "108fall3_mpvgpnn",
+    #     "108fall4_mpvgpnn",
+    #     "108fall5_mpvgpnn",
+    #     "110grasstree_mpvgpnn",
+    #     "110pillar_mpvgpnn",
+    #     "1017palm_mpvgpnn",
+    #     "1017yuanrm_mpvgpnn",
+    #     "1020rockrm_mpvgpnn",
+    #     "1020ustfall1_mpvgpnn",
+    #     "1020ustfall2_mpvgpnn",
+    #     "1101grass_mpvgpnn",
+    #     "1101towerd_mpvgpnn",
+    #     "ustfallclose_mpvgpnn",
+    #     "usttap_mpvgpnn"
+    # ]
+    #
+    # for cfg1 in cfg1s:
+    #     export_mpv_repr(
+    #         "configs/mpvgpnn_wospa.txt",
+    #         f"configs/mpvgpnn_final_base/{cfg1}.txt",
+    #         "/d1/scratch/PI/psander/data/VideoLoops",
+    #     )
+
 

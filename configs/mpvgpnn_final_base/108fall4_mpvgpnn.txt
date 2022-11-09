@@ -1,8 +1,8 @@
 expname = sparse_108fall4_f50_v18A0PtStB341_otherA100PtSt3321
 datadir = data/fall4720p
-init_from = meshlogfinal_loopv2/108fall4_n095f12_rmlayer2_smth05_density002_loopmav2/epoch_0119.tar
+init_from = meshlog1final/108fall4_n095f12_rmlayer2_smth05_density002_loopmav2/epoch_0119.tar
 mpv_frm_num = 50
-mpv_isloop
+test_view_idx = 4
 
 loss_ref_idx = 1,8
 swd_macro_block = 65

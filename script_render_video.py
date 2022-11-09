@@ -26,18 +26,63 @@ def evaluate(args):
         print(f"Using CPU for training")
 
     expname = args.expname + args.expname_postfix
-    print(f"Training: {expname}")
+    print(f"Rendering: {expname}")
     datadir = os.path.join(args.prefix, args.datadir)
     expdir = os.path.join(args.prefix, args.expdir)
+
+    # figure out render_frm to be consistent
+    render_frm = args.f if args.f > 0 else (120 // args.mpv_frm_num + 1) * args.mpv_frm_num
+    print(f"loading render pose with {render_frm} frames")
     videos, FPS, poses, intrins, bds, render_poses, render_intrins = \
         load_mv_videos(basedir=datadir,
                        factor=args.factor,
-                           bd_factor=(args.near_factor, args.far_factor),
-                       recenter=True)
+                       bd_factor=(args.near_factor, args.far_factor),
+                       recenter=True,
+                       render_frm=render_frm)
 
     H, W = videos[0][0].shape[0:2]
     V = len(videos)
     print('Loaded llff', V, H, W, poses.shape, intrins.shape, render_poses.shape, bds.shape)
+
+    # figure out view to be rendered
+    view_poses, view_intrins = render_poses.copy(), render_intrins.copy()
+    render_t = np.arange(len(render_poses)) % args.mpv_frm_num
+    if args.v == 'test':
+        args.v = args.test_view_idx.split(',')[0]
+
+    if len(args.v) > 0:
+        render_t = render_t[:args.mpv_frm_num]
+        if args.v[0] == 'r':
+            v = int(args.v[1:])
+            view_poses[:] = view_poses[v:v+1]
+            view_intrins[:] = render_intrins[v:v+1]
+            print(f"Rendering view {v} in render_pose")
+        else:
+            v = int(args.v)
+            view_poses[:] = poses[v:v+1]
+            view_intrins[:] = intrins[v:v+1]
+            print(f"Rendering view {v}")
+
+    # figure out time to be rendered
+    if len(args.t) > 0:
+        if ',' in args.t and ':' not in args.t:
+            time_range = list(map(int, args.t.split(',')))
+            render_t = render_t[time_range]
+        elif ':' in args.t:
+            slices = args.t.split(',')
+            render_t = []
+            for slic in slices:
+                start, end = list(map(int, slic.split(':')))
+                step = 1 if start <= end else -1
+                render_t.append(np.arange(start, end, step))
+            render_t = np.concatenate(render_t)
+        else:
+            time_range = [int(args.t)]
+            render_t = render_t[time_range]
+
+    view_poses = view_poses[:len(render_t)]
+    view_intrins = view_intrins[:len(render_t)]
+    print(f"Rendering time {render_t}")
 
     ref_pose = poses_avg(poses)[:, :4]
     ref_extrin = pose2extrin_np(ref_pose)
@@ -52,10 +97,10 @@ def evaluate(args):
 
     nerf = nn.DataParallel(nerf, list(range(args.gpu_num)))
     nerf.to(device)
-    extrins = pose2extrin_np(poses)
-    extrins = torch.tensor(extrins).float()
-    poses = torch.tensor(poses).float()
-    intrins = torch.tensor(intrins).float()
+
+    view_extrins = pose2extrin_np(view_poses)
+    view_extrins = torch.tensor(view_extrins).float()
+    view_intrins = torch.tensor(view_intrins).float()
 
     ##########################
     # load from checkpoint
@@ -78,22 +123,44 @@ def evaluate(args):
     # ##########################
 
     print('Begin')
-    moviebase = os.path.join(expdir, expname, f'eval_')
+    moviebase = os.path.join(expdir, expname, f'renderonly')
+    os.makedirs(moviebase, exist_ok=True)
     with torch.no_grad():
         nerf.eval()
 
-        for viewi in range(V):
-            torch.cuda.empty_cache()
-            r_pose = extrins[viewi: viewi + 1]
-            r_intrin = intrins[viewi: viewi + 1]
-            rgb, extra = nerf(H, W, r_pose, r_intrin)
-            rgb = rgb.permute(0, 2, 3, 1).cpu().numpy()
+        rgbs = []
+        for viewi in trange(len(view_poses)):
+            r_pose = view_extrins[viewi: viewi + 1]
+            r_intrin = view_intrins[viewi: viewi + 1]
+            t = render_t[viewi: viewi + 1]
+            rgb, extra = nerf(H, W, r_pose, r_intrin, t)
+            rgb = rgb.permute(0, 2, 3, 1).cpu().numpy()[0]
+            rgbs.append(to8b(rgb))
 
-            imageio.mimwrite(moviebase + f'_view{viewi:04d}.mp4', to8b(rgb), fps=25, quality=8)
+        if len(rgbs) < 3:
+            print("too less frames, force to write images")
+            args.type += 'seq'
+
+        if 'seq' in args.type:
+            for i, rgb in enumerate(rgbs):
+                imageio.imwrite(moviebase + f'/view{args.v}t{args.t}_{i:04d}.png', rgb)
+        else:
+            imageio.mimwrite(moviebase + f'/view{args.v}t{args.t}.mp4', rgbs, fps=25, quality=8, macro_block_size=1)
 
 
 if __name__ == '__main__':
     parser = config_parser()
+    parser.add_argument("--v", type=str, default='test',
+                        help='render view control, empty to be render_pose, r# to be #-th render pose, '
+                             '# to be #-th training pose')
+    parser.add_argument("--t", type=str, default='',
+                        help='render time control, empty to be arange(len(views)), '
+                             '#,#,# to be #-th frame, #:# to be #(include) to #(exclude) frame, :, can be mixed')
+    parser.add_argument("--f", type=int, default=-1,
+                        help='overwrite the frame number when loading the render pose')
+    parser.add_argument("--type", type=str, default='vid',
+                        help='choose among seq, vid, depth, depthrgb')
+
     args = parser.parse_args()
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
