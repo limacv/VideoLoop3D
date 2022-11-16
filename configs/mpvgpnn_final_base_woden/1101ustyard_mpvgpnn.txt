@@ -1,6 +1,6 @@
 expname = sparse_1101ustyard_f50_v36A0PtStB341_otherA100PtSt3321
 datadir = data/1101ustyard720p
-init_from = meshlog1_wodensity/1101ustyard_n11f2_rmlayer0_smth05_density002_loopmav2/epoch_0119.tar
+init_from = meshlog1_wodensity/1101ustyard_n11f2_rmlayer1_smth05_density002_loopmav2/epoch_0119.tar
 mpv_frm_num = 50
 test_view_idx = 4
 

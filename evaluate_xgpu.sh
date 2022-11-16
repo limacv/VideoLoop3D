@@ -2,23 +2,23 @@
 ########################################################################
 # Customized settings
 
-CUDA_VISIBLE_DEVICES=9 python script_evaluate_ours.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
-  --expname sparse_110pillar_spa0001 --init_from meshlog1final/110pillar_spa0001/epoch_0119.tar &
-
-CUDA_VISIBLE_DEVICES=8 python script_evaluate_ours.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
-  --expname sparse_110pillar_spa0 --init_from meshlog1final/110pillar_spa0/epoch_0119.tar &
-
-CUDA_VISIBLE_DEVICES=7 python script_evaluate_ours.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
-  --expname sparse_110pillar_spa0012 --init_from meshlog1final/110pillar_spa0012/epoch_0119.tar &
-
-CUDA_VISIBLE_DEVICES=6 python script_evaluate_ours.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
-  --expname sparse_110pillar_spa002 --init_from meshlog1final/110pillar_spa002/epoch_0119.tar &
-
-CUDA_VISIBLE_DEVICES=5 python script_evaluate_ours.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
-  --expname sparse_110pillar_spa0002 --init_from meshlog1final/110pillar_spa0002/epoch_0119.tar &
-
-CUDA_VISIBLE_DEVICES=4 python script_evaluate_ours.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
-  --expname sparse_110pillar_spa0008 --init_from meshlog1final/110pillar_spa0008/epoch_0119.tar &
+#CUDA_VISIBLE_DEVICES=9 python script_evaluate_ours.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
+#  --expname sparse_110pillar_spa0001 --init_from meshlog1final/110pillar_spa0001/epoch_0119.tar &
+#
+#CUDA_VISIBLE_DEVICES=8 python script_evaluate_ours.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
+#  --expname sparse_110pillar_spa0 --init_from meshlog1final/110pillar_spa0/epoch_0119.tar &
+#
+#CUDA_VISIBLE_DEVICES=7 python script_evaluate_ours.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
+#  --expname sparse_110pillar_spa0012 --init_from meshlog1final/110pillar_spa0012/epoch_0119.tar &
+#
+#CUDA_VISIBLE_DEVICES=6 python script_evaluate_ours.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
+#  --expname sparse_110pillar_spa002 --init_from meshlog1final/110pillar_spa002/epoch_0119.tar &
+#
+#CUDA_VISIBLE_DEVICES=5 python script_evaluate_ours.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
+#  --expname sparse_110pillar_spa0002 --init_from meshlog1final/110pillar_spa0002/epoch_0119.tar &
+#
+#CUDA_VISIBLE_DEVICES=4 python script_evaluate_ours.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
+#  --expname sparse_110pillar_spa0008 --init_from meshlog1final/110pillar_spa0008/epoch_0119.tar &
 
 
 
@@ -54,6 +54,10 @@ CUDA_VISIBLE_DEVICES=4 python script_evaluate_ours.py --config configs/mpvgpnn_a
 
 #########################################################################
 # Config centric
+
+# full # -- train ok
+#CFGNAME=mpvgpnn_woden
+#CFG1DIR=mpvgpnn_final_base_woden
 
 # full # -- train ok
 #CFGNAME=mpvgpnn_wospa1
@@ -105,6 +109,12 @@ CUDA_VISIBLE_DEVICES=4 python script_evaluate_ours.py --config configs/mpvgpnn_a
 #CUDA_VISIBLE_DEVICES=3 python script_evaluate_ours.py \
 #  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/110pillar_mpvgpnn.txt &
 #
+#CUDA_VISIBLE_DEVICES=2 python script_evaluate_ours.py \
+#  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/1101grass_mpvgpnn.txt &
+#
+#CUDA_VISIBLE_DEVICES=1 python script_evaluate_ours.py \
+#  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/1101towerd_mpvgpnn.txt &
+#
 #
 #wait
 #
@@ -128,6 +138,12 @@ CUDA_VISIBLE_DEVICES=4 python script_evaluate_ours.py --config configs/mpvgpnn_a
 #
 #CUDA_VISIBLE_DEVICES=3 python script_evaluate_ours.py \
 #  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/usttap_mpvgpnn.txt &
+
+#CUDA_VISIBLE_DEVICES=2 python script_evaluate_ours.py \
+#  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/1101ustpalm_mpvgpnn.txt &
+#
+#CUDA_VISIBLE_DEVICES=1 python script_evaluate_ours.py \
+#  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/1101ustyard_mpvgpnn.txt &
 
 
 

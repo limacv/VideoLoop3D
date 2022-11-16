@@ -54,7 +54,7 @@ def _load_data(basedir, factor=None, width=None, height=None, load_imgs=True):
 
 
 def load_llff_data(basedir, factor=8, recenter=True, bd_factor=(1, 1), spherify=False, path_epi=False,
-                   load_img=True, render_frm=120):
+                   load_img=True, render_frm=120, render_scaling=1.):
     poses, bds, imgs = _load_data(basedir, factor=factor, load_imgs=load_img)
     # factor=8 downsamples original imgs by 8x
     print('Loaded', basedir, bds.min(), bds.max())
@@ -103,7 +103,7 @@ def load_llff_data(basedir, factor=8, recenter=True, bd_factor=(1, 1), spherify=
         shrink_factor = .8
         zdelta = close_depth * .2
         tt = poses[:, :3, 3]  # ptstocam(poses[:3,3,:].T, c2w).T
-        rads = np.abs(tt).max(0) * 0.8
+        rads = np.abs(tt).max(0) * 0.8 * render_scaling
         # rads = np.percentile(np.abs(tt), 90, 0)
         c2w_path = c2w
         N_views = render_frm
@@ -134,11 +134,12 @@ def load_llff_data(basedir, factor=8, recenter=True, bd_factor=(1, 1), spherify=
     return imgs, poses, intrins, bds, render_poses, render_intrins
 
 
-def load_mv_videos(basedir, factor=1, recenter=True, bd_factor=(1, 1), render_frm=120):
+def load_mv_videos(basedir, factor=1, recenter=True, bd_factor=(1, 1), render_frm=120, render_scaling=1):
     _, poses, intrins, bds, render_poses, render_intrins = load_llff_data(basedir, factor, recenter,
                                                                           bd_factor=bd_factor,
                                                                           load_img=False,
-                                                                          render_frm=render_frm)
+                                                                          render_frm=render_frm,
+                                                                          render_scaling=render_scaling)
     videos_path = sorted(glob.glob(basedir + f"/videos_{factor}/*"))
     videos = [imageio.mimread(vp, memtest=False) for vp in videos_path]
     cap = cv2.VideoCapture(videos_path[0])

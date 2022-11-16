@@ -38,7 +38,8 @@ def evaluate(args):
                        factor=args.factor,
                        bd_factor=(args.near_factor, args.far_factor),
                        recenter=True,
-                       render_frm=render_frm)
+                       render_frm=render_frm,
+                       render_scaling=args.render_scaling)
 
     H, W = videos[0][0].shape[0:2]
     V = len(videos)
@@ -150,7 +151,7 @@ def evaluate(args):
 
 if __name__ == '__main__':
     parser = config_parser()
-    parser.add_argument("--v", type=str, default='test',
+    parser.add_argument("--v", type=str, default='',
                         help='render view control, empty to be render_pose, r# to be #-th render pose, '
                              '# to be #-th training pose')
     parser.add_argument("--t", type=str, default='',
@@ -160,6 +161,8 @@ if __name__ == '__main__':
                         help='overwrite the frame number when loading the render pose')
     parser.add_argument("--type", type=str, default='vid',
                         help='choose among seq, vid, depth, depthrgb')
+    parser.add_argument("--render_scaling", type=float, default=1,
+                        help='radius of the render spire')
 
     args = parser.parse_args()
     np.random.seed(args.seed)
