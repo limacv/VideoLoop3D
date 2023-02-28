@@ -211,6 +211,10 @@ def train():
             loop_loss = 0
 
         # RGB loss
+        if args.scale_invariant:
+            scale = torch.exp(torch.log((b_rgbs + 0.01) / (rgb.detach() + 0.01)).mean())
+            scale = (scale + 1) / 2  # prevent scaling ambiguouity
+            rgb = rgb * scale
         img_loss = img2mse(rgb, b_rgbs)
         psnr = mse2psnr(img_loss)
 

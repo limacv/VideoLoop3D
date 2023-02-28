@@ -164,10 +164,30 @@ def export_mpv_repr(cfg_file, cfg_file1, prefix="D:\\MSI_NB\\source\\data\\Video
 
 if __name__ == "__main__":
     export_mpv_repr(
-            "configs/mpvgpnn_wospa.txt",
-            f"configs/mpvgpnn_final_base/108fall4_mpvgpnn.txt",
-            "/d1/scratch/PI/psander/data/VideoLoops",
+        "configs/mpvgpnn_wospa.txt",
+        f"configs/mpvgpnn_final_base_tilesz/1101grass_mpvgpnn_tile64.txt",
+        "/d1/scratch/PI/psander/data/VideoLoops",
         )
+    export_mpv_repr(
+        "configs/mpvgpnn_wospa.txt",
+        f"configs/mpvgpnn_final_base_tilesz/1101grass_mpvgpnn_tile2txt",
+        "/d1/scratch/PI/psander/data/VideoLoops",
+    )
+    export_mpv_repr(
+        "configs/mpvgpnn_wospa.txt",
+        f"configs/mpvgpnn_final_base_tilesz/1101grass_mpvgpnn_tile4.txt",
+        "/d1/scratch/PI/psander/data/VideoLoops",
+    )
+    export_mpv_repr(
+        "configs/mpvgpnn_wospa.txt",
+        f"configs/mpvgpnn_final_base_tilesz/1101grass_mpvgpnn_tile8.txt",
+        "/d1/scratch/PI/psander/data/VideoLoops",
+    )
+    export_mpv_repr(
+        "configs/mpvgpnn_wospa.txt",
+        f"configs/mpvgpnn_final_base_tilesz/1101grass_mpvgpnn_tile32.txt",
+        "/d1/scratch/PI/psander/data/VideoLoops",
+    )
     # cfg1s = [
     #     "108fall1narrow_mpvgpnn",
     #     "108fall2_mpvgpnn",
@@ -186,7 +206,7 @@ if __name__ == "__main__":
     #     "ustfallclose_mpvgpnn",
     #     "usttap_mpvgpnn"
     # ]
-    #
+
     # for cfg1 in cfg1s:
     #     export_mpv_repr(
     #         "configs/mpvgpnn_wospa.txt",

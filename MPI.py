@@ -537,8 +537,11 @@ class MPMesh(nn.Module):
         )
         alpha = blend_weight.sum(dim=-1)
         if len(self.args.bg_color) > 0:
-            r, g, b = map(float, self.args.bg_color.split('#'))
-            bg_color = torch.tensor([r, g, b]).type_as(rgb)
+            if self.args.bg_color == "random":
+                bg_color = torch.rand(3).type_as(rgb)
+            else:
+                r, g, b = map(float, self.args.bg_color.split('#'))
+                bg_color = torch.tensor([r, g, b]).type_as(rgb)
             rgb = rgb * alpha[..., None] + bg_color[None, None, None] * (- alpha[..., None] + 1)
 
         # get depth map

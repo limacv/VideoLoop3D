@@ -32,7 +32,9 @@ def config_parser():
     parser.add_argument("--fp16", action='store_true',
                         help='use half precision to train')
     parser.add_argument("--bg_color", type=str, default="",
-                        help='0#0#0')
+                        help='0#0#0, or random')
+    parser.add_argument("--scale_invariant", action='store_true',
+                        help='scale_invariant rgb loss')
 
     # for MPV only, not used for MPMesh
     parser.add_argument("--mpv_frm_num", type=int, default=90,

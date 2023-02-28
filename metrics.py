@@ -11,10 +11,6 @@ photometric = {
     "lpips": None
 }
 
-if os.name == 'posix':
-    print("Change torch hub cache to /apdcephfs/private_leema/data/torch_cache")
-    torch.hub.set_dir("/apdcephfs/private_leema/data/torch_cache")
-
 
 def compute_img_metric(im1t: torch.Tensor, im2t: torch.Tensor,
                        metric="mse", mask=None, range01=True):
@@ -71,17 +67,17 @@ def compute_img_metric(im1t: torch.Tensor, im2t: torch.Tensor,
                 im1[i], im2[i]
             )
             if mask is not None:
-                pixelnum = mask[i, ..., 0].sum()
+                pixelnum = mask[i % len(mask), ..., 0].sum()
                 if metric == "mse":
                     value = value * hei * wid / pixelnum
                 else:
                     value = value - 10 * np.log10(hei * wid / pixelnum)
         elif metric in ["ssim"]:
             value, ssimmap = photometric["ssim"](
-                im1[i], im2[i], multichannel=True, full=True
+                im1[i], im2[i], channel_axis=-1, full=True
             )
             if mask is not None:
-                value = (ssimmap * mask[i]).sum() / mask[i].sum() / 3
+                value = (ssimmap * mask[i % len(mask)]).sum() / mask[i % len(mask)].sum() / 3
         elif metric in ["lpips"]:
             value = photometric[metric](
                 im1t[i:i + 1], im2t[i:i + 1]

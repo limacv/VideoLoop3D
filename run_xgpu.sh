@@ -1,6 +1,74 @@
 {
 
+#CFGNAME=mpmesh_tilesz
+#CFG1DIR=mpmesh_final
 
+#CUDA_VISIBLE_DEVICES=0 python train_3d.py \
+#  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/1101grass_mpmesh.txt \
+#  --mpi_h_scale 1.6 --mpi_w_scale 1.6 --mpi_h_verts 577 --mpi_w_verts 1025 \
+#  --expname_postfix tilesz1 &
+#
+#CUDA_VISIBLE_DEVICES=1 python train_3d.py \
+#  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/1101grass_mpmesh.txt \
+#  --mpi_h_scale 1.6 --mpi_w_scale 1.6 --mpi_h_verts 289 --mpi_w_verts 513 \
+#  --expname_postfix tilesz2 &
+#
+#CUDA_VISIBLE_DEVICES=2 python train_3d.py \
+#  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/1101grass_mpmesh.txt \
+#  --mpi_h_scale 1.6 --mpi_w_scale 1.6 --mpi_h_verts 145 --mpi_w_verts 257 \
+#  --expname_postfix tilesz4 &
+#
+#CUDA_VISIBLE_DEVICES=3 python train_3d.py \
+#  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/1101grass_mpmesh.txt \
+#  --mpi_h_scale 1.6 --mpi_w_scale 1.6 --mpi_h_verts 73 --mpi_w_verts 129 \
+#  --expname_postfix tilesz8 &
+#
+#CUDA_VISIBLE_DEVICES=9 python train_3d.py \
+#  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/1101grass_mpmesh.txt \
+#  --mpi_h_scale 1.6 --mpi_w_scale 1.6 --mpi_h_verts 19 --mpi_w_verts 33 \
+#  --expname_postfix tilesz32 &
+#
+#CUDA_VISIBLE_DEVICES=8 python train_3d.py \
+#  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/1101grass_mpmesh.txt \
+#  --mpi_h_scale 1.6 --mpi_w_scale 1.6 --mpi_h_verts 10 --mpi_w_verts 17 \
+#  --expname_postfix tilesz64 &
+
+wait
+
+#CFGNAME=mpvgpnn_wospa
+#CFG1DIR=mpvgpnn_final_base
+# MPV
+#CUDA_VISIBLE_DEVICES=5 python train_3dvid.py \
+#  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/1101grass_mpvgpnn.txt \
+#  --expdir log1_tilesz --expname sparse_grass_full_tilesz1 \
+#  --init_from meshlog1tilesz/1101grass_n099f25_rmlayer1_smth05_density002_loopmav2tilesz1/epoch_0119.tar &
+#
+#CUDA_VISIBLE_DEVICES=4 python train_3dvid.py \
+#  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/1101grass_mpvgpnn.txt \
+#  --expdir log1_tilesz --expname sparse_grass_full_tilesz2 \
+#  --init_from meshlog1tilesz/1101grass_n099f25_rmlayer1_smth05_density002_loopmav2tilesz2/epoch_0119.tar &
+#
+#CUDA_VISIBLE_DEVICES=3 python train_3dvid.py \
+#  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/1101grass_mpvgpnn.txt \
+#  --expdir log1_tilesz --expname sparse_grass_full_tilesz4 \
+#  --init_from meshlog1tilesz/1101grass_n099f25_rmlayer1_smth05_density002_loopmav2tilesz4/epoch_0119.tar &
+#
+#CUDA_VISIBLE_DEVICES=2 python train_3dvid.py \
+#  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/1101grass_mpvgpnn.txt \
+#  --expdir log1_tilesz --expname sparse_grass_full_tilesz8 \
+#  --init_from meshlog1tilesz/1101grass_n099f25_rmlayer1_smth05_density002_loopmav2tilesz8/epoch_0119.tar &
+
+#CUDA_VISIBLE_DEVICES=9 python train_3dvid.py \
+#  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/1101grass_mpvgpnn.txt \
+#  --expdir log1_tilesz --expname sparse_grass_full_tilesz32 \
+#  --init_from meshlog1tilesz/1101grass_n099f25_rmlayer1_smth05_density002_loopmav2tilesz32/epoch_0119.tar &
+#
+#CUDA_VISIBLE_DEVICES=8 python train_3dvid.py \
+#  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/1101grass_mpvgpnn.txt \
+#  --expdir log1_tilesz --expname sparse_grass_full_tilesz64 \
+#  --init_from meshlog1tilesz/1101grass_n099f25_rmlayer1_smth05_density002_loopmav2tilesz64/epoch_0119.tar &
+#
+#wait
 ########################################################################
 # Customized configs
 
@@ -45,62 +113,62 @@
 
 
 
-CUDA_VISIBLE_DEVICES=9 python train_3d.py --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/110pillarrm_mpmesh.txt \
-  --expname 110pillar_tv02 --rgb_smooth_loss_weight 0.07 --a_smooth_loss_weight 0.2 &
-
-CUDA_VISIBLE_DEVICES=8 python train_3d.py --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/110pillarrm_mpmesh.txt \
-  --expname 110pillar_tv01 --rgb_smooth_loss_weight 0.033 --a_smooth_loss_weight 0.1 &
-
-CUDA_VISIBLE_DEVICES=7 python train_3d.py --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/110pillarrm_mpmesh.txt \
-  --expname 110pillar_tv005 --rgb_smooth_loss_weight 0.02 --a_smooth_loss_weight 0.05 &
-
-CUDA_VISIBLE_DEVICES=6 python train_3d.py --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/110pillarrm_mpmesh.txt \
-  --expname 110pillar_tv001 --rgb_smooth_loss_weight 0.0033 --a_smooth_loss_weight 0.01 &
-
-CUDA_VISIBLE_DEVICES=5 python train_3d.py --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/110pillarrm_mpmesh.txt \
-  --expname 110pillar_tv075 --rgb_smooth_loss_weight 0.25 --a_smooth_loss_weight 0.75 &
-
-CUDA_VISIBLE_DEVICES=4 python train_3d.py --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/110pillarrm_mpmesh.txt \
-  --expname 110pillar_tv1 --rgb_smooth_loss_weight 0.33 --a_smooth_loss_weight 1 &
-
-CUDA_VISIBLE_DEVICES=3 python train_3d.py --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/110pillarrm_mpmesh.txt \
-  --expname 110pillar_tv15 --rgb_smooth_loss_weight 0.5 --a_smooth_loss_weight 1.5 &
-
-CUDA_VISIBLE_DEVICES=2 python train_3d.py --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/110pillarrm_mpmesh.txt \
-  --expname 110pillar_tv24 --rgb_smooth_loss_weight 0.8 --a_smooth_loss_weight 2.4 &
+#CUDA_VISIBLE_DEVICES=9 python train_3d.py --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/110pillarrm_mpmesh.txt \
+#  --expname 110pillar_tv02 --rgb_smooth_loss_weight 0.07 --a_smooth_loss_weight 0.2 &
+#
+#CUDA_VISIBLE_DEVICES=8 python train_3d.py --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/110pillarrm_mpmesh.txt \
+#  --expname 110pillar_tv01 --rgb_smooth_loss_weight 0.033 --a_smooth_loss_weight 0.1 &
+#
+#CUDA_VISIBLE_DEVICES=7 python train_3d.py --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/110pillarrm_mpmesh.txt \
+#  --expname 110pillar_tv005 --rgb_smooth_loss_weight 0.02 --a_smooth_loss_weight 0.05 &
+#
+#CUDA_VISIBLE_DEVICES=6 python train_3d.py --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/110pillarrm_mpmesh.txt \
+#  --expname 110pillar_tv001 --rgb_smooth_loss_weight 0.0033 --a_smooth_loss_weight 0.01 &
+#
+#CUDA_VISIBLE_DEVICES=5 python train_3d.py --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/110pillarrm_mpmesh.txt \
+#  --expname 110pillar_tv075 --rgb_smooth_loss_weight 0.25 --a_smooth_loss_weight 0.75 &
+#
+#CUDA_VISIBLE_DEVICES=4 python train_3d.py --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/110pillarrm_mpmesh.txt \
+#  --expname 110pillar_tv1 --rgb_smooth_loss_weight 0.33 --a_smooth_loss_weight 1 &
+#
+#CUDA_VISIBLE_DEVICES=3 python train_3d.py --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/110pillarrm_mpmesh.txt \
+#  --expname 110pillar_tv15 --rgb_smooth_loss_weight 0.5 --a_smooth_loss_weight 1.5 &
+#
+#CUDA_VISIBLE_DEVICES=2 python train_3d.py --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/110pillarrm_mpmesh.txt \
+#  --expname 110pillar_tv24 --rgb_smooth_loss_weight 0.8 --a_smooth_loss_weight 2.4 &
 
 wait
 
-CUDA_VISIBLE_DEVICES=9 python train_3dvid.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
-  --expname sparse_110pillar_tv02 --init_from meshlog1final/110pillar_tv02/epoch_0119.tar &
-
-CUDA_VISIBLE_DEVICES=8 python train_3dvid.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
-  --expname sparse_110pillar_tv01 --init_from meshlog1final/110pillar_tv01/epoch_0119.tar &
-
-CUDA_VISIBLE_DEVICES=7 python train_3dvid.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
-  --expname sparse_110pillar_tv005 --init_from meshlog1final/110pillar_tv005/epoch_0119.tar &
-
-CUDA_VISIBLE_DEVICES=6 python train_3dvid.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
-  --expname sparse_110pillar_tv001 --init_from meshlog1final/110pillar_tv001/epoch_0119.tar &
-
-CUDA_VISIBLE_DEVICES=5 python train_3dvid.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
-  --expname sparse_110pillar_tv075 --init_from meshlog1final/110pillar_tv075/epoch_0119.tar &
-
-CUDA_VISIBLE_DEVICES=4 python train_3dvid.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
-  --expname sparse_110pillar_tv1 --init_from meshlog1final/110pillar_tv1/epoch_0119.tar &
-
-CUDA_VISIBLE_DEVICES=3 python train_3dvid.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
-  --expname sparse_110pillar_tv15 --init_from meshlog1final/110pillar_tv15/epoch_0119.tar &
-
-CUDA_VISIBLE_DEVICES=2 python train_3dvid.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
-  --expname sparse_110pillar_tv24 --init_from meshlog1final/110pillar_tv24/epoch_0119.tar &
+#CUDA_VISIBLE_DEVICES=9 python train_3dvid.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
+#  --expname sparse_110pillar_tv02 --init_from meshlog1final/110pillar_tv02/epoch_0119.tar &
+#
+#CUDA_VISIBLE_DEVICES=8 python train_3dvid.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
+#  --expname sparse_110pillar_tv01 --init_from meshlog1final/110pillar_tv01/epoch_0119.tar &
+#
+#CUDA_VISIBLE_DEVICES=7 python train_3dvid.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
+#  --expname sparse_110pillar_tv005 --init_from meshlog1final/110pillar_tv005/epoch_0119.tar &
+#
+#CUDA_VISIBLE_DEVICES=6 python train_3dvid.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
+#  --expname sparse_110pillar_tv001 --init_from meshlog1final/110pillar_tv001/epoch_0119.tar &
+#
+#CUDA_VISIBLE_DEVICES=5 python train_3dvid.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
+#  --expname sparse_110pillar_tv075 --init_from meshlog1final/110pillar_tv075/epoch_0119.tar &
+#
+#CUDA_VISIBLE_DEVICES=4 python train_3dvid.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
+#  --expname sparse_110pillar_tv1 --init_from meshlog1final/110pillar_tv1/epoch_0119.tar &
+#
+#CUDA_VISIBLE_DEVICES=3 python train_3dvid.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
+#  --expname sparse_110pillar_tv15 --init_from meshlog1final/110pillar_tv15/epoch_0119.tar &
+#
+#CUDA_VISIBLE_DEVICES=2 python train_3dvid.py --config configs/mpvgpnn_abspa.txt --config1 configs/mpvgpnn_final_base/110pillar_mpvgpnn.txt \
+#  --expname sparse_110pillar_tv24 --init_from meshlog1final/110pillar_tv24/epoch_0119.tar &
 
 
 
 ########################################################################
 # DATA Centeric MPI configs
 
-#DATASET_NAME=108fall4_mpmesh
+#DATASET_NAME=1017dorm1_mpmesh
 
 #CUDA_VISIBLE_DEVICES=9 python train_3d.py \
 #  --config configs/mpmesh_shared.txt --config1 configs/mpmesh_final/$DATASET_NAME.txt &
@@ -132,7 +200,10 @@ wait
 #CFGNAME=mpmesh_shared
 #CFG1DIR=mpmesh_final
 #FLAG="--density_loss_weight 0 --expdir meshlog_wodensity"
-#
+
+#CFGNAME=mpmesh_shared
+#CFG1DIR=mpmesh_final
+
 #CUDA_VISIBLE_DEVICES=9 python train_3d.py \
 #  --config configs/$CFGNAME.txt --config1 configs/$CFG1DIR/108fall1narrow_mpmesh.txt $FLAG &
 #
@@ -202,10 +273,10 @@ wait
 ########################################################################
 # DATA Centeric MPV configs
 
-#DATASET_NAME=108fall4_mpvgpnn
+DATASET_NAME=1017dorm1_mpvgpnn
 #
-#CUDA_VISIBLE_DEVICES=9 python train_3dvid.py \
-#  --config configs/mpvgpnn_wospa.txt --config1 configs/mpvgpnn_final_base/$DATASET_NAME.txt &
+CUDA_VISIBLE_DEVICES=9 python train_3dvid.py \
+  --config configs/mpvgpnn_wospa.txt --config1 configs/mpvgpnn_final_base/$DATASET_NAME.txt &
 
 #CUDA_VISIBLE_DEVICES=8 python train_3dvid.py \
 #  --config configs/mpvgpnn_wotv.txt --config1 configs/mpvgpnn_final_base_wotv/$DATASET_NAME.txt &
