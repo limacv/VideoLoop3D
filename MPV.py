@@ -9,7 +9,6 @@ import cv2
 from utils import *
 from NeRF_modules import get_embedder
 from utils_mpi import *
-import trimesh
 from utils_vid import Patch3DGPNNDirectLoss, Patch3DMSE, Patch3DAvg, \
     Patch3DGPNNLowMemLoss, Patch3DGPNNLowMemDownSampleLoss
 from pytorch3d.structures import Meshes
@@ -307,19 +306,23 @@ class MPMeshVid(nn.Module):
         return state_dict
 
     def save_mesh(self, prefix):
-        vertices, faces, uvs = self.verts.detach(), self.faces.detach(), self.uvs.detach()
+        vertices, faces = self.verts.detach(), self.faces.detach()
+        uvs = self.uvs.detach().cpu().numpy()
+        uvfaces = self.uvfaces.detach().cpu().numpy()
+        uvs = normalize_uv(uvs, self.atlas.shape[2], self.atlas.shape[3])
         if len(faces) > 0:
-            mesh1 = trimesh.Trimesh(vertices.cpu().numpy(), faces.cpu().numpy())
-            txt = mesh1.export(prefix + ".obj", "obj")
-            with open(prefix + ".obj", 'w') as f:
-                f.write(txt)
+            print(f"Saving to {prefix}: # v = {len(vertices)}, # f = {len(faces)}")
+            save_obj(prefix + ".obj", vertices.cpu().numpy(), faces.cpu().numpy(),
+                                        uvs, uvfaces)
 
-        vertices, faces, uvs = self.verts.detach(), self.faces_dyn.detach(), self.uvs_dyn.detach()
+        vertices, faces = self.verts.detach(), self.faces_dyn.detach()
+        uvs = self.uvs_dyn.detach().cpu().numpy()
+        uvfaces = self.uvfaces_dyn.detach().cpu().numpy()
+        uvs = normalize_uv(uvs, self.atlas_dyn.shape[2], self.atlas_dyn.shape[3])
         if len(faces) > 0:
-            mesh1 = trimesh.Trimesh(vertices.cpu().numpy(), faces.cpu().numpy())
-            txt = mesh1.export(prefix + "_dyn.obj", "obj")
-            with open(prefix + "_dyn.obj", 'w') as f:
-                f.write(txt)
+            print(f"Saving to {prefix + '_dyn.obj'}: # v = {len(vertices)}, # f = {len(faces)}")
+            save_obj(prefix + "_dyn.obj", vertices.cpu().numpy(), faces.cpu().numpy(),
+                     uvs, uvfaces)
 
     @torch.no_grad()
     def save_texture(self, prefix):
@@ -414,7 +417,13 @@ class MPMeshVid(nn.Module):
             # ray_direction_ = ray_direction[..., None, :].expand(mask_.shape + (3,))
             # ray_d_ = ray_direction_.reshape(-1, 3)[mask_flat_, :]
             # ray_d_ = self.view_embed_fn(ray_d_.reshape(-1, 3))
-            batch_size_, cnl_ = atlas_.shape[:2]
+            batch_size_, cnl_, h_, w_ = atlas_.shape
+
+            if self.args.add_uv_noise and self.training:
+                hpix = torch.tensor([[1 / (w_ - 1), 1 / (h_ - 1)]]).type_as(uvs_)
+                rand = torch.rand(uvs_.shape).type_as(uvs_) * 2 - 1
+                uvs_ = uvs_ + hpix * rand
+
             rgba_feat_ = torchf.grid_sample(atlas_,
                                             uvs_[None, None, ...].expand(batch_size_, 1, -1, 2),
                                             padding_mode="zeros", align_corners=True)
@@ -488,6 +497,14 @@ class MPMeshVid(nn.Module):
             loss_name = losscfg.pop('loss_name')
             loss_gain = losscfg.pop('loss_gain', 1.)
             loss = self.losses[loss_name]
+
+            if self.args.scale_invariant and self.training:
+                res_avg = res[0].mean(dim=0)
+                rgb_avg = rgb.detach().mean(dim=0)
+                scale = torch.exp(torch.log((res_avg + 0.01) / (rgb_avg + 0.01)).mean())
+                scale = (scale + 3) / 4  # prevent scaling ambiguouity
+                rgb_pad = rgb_pad * scale
+
             main_loss = loss(rgb_pad.permute(1, 0, 2, 3)[None],
                              res.permute(0, 2, 1, 3, 4), **losscfg)
 

@@ -1,0 +1,7 @@
+expname = 108fall1
+datadir = data/fall1narrow720p
+near_factor = 0.90
+far_factor = 2
+sparsify_rmfirstlayer = 4
+
+

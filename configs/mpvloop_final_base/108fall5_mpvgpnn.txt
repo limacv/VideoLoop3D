@@ -1,4 +1,0 @@
-expname = loop_sparse_108fall5_mse
-datadir = data/fall5720p_loop
-init_from = meshlog1final/108fall5_n098f2_rmlayer0_smth05_density002_loopmav2/epoch_0119.tar
-test_view_idx = 4

@@ -1,4 +1,0 @@
-expname = loop_dense_ustfallclose_mse
-datadir = data/ustfallclose720p_loop
-init_from = meshlog1_dense/ustfallclose_n1f12_rmlayer0_smth05_density002_loopmav2/epoch_0119.tar
-test_view_idx = 1

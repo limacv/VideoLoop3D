@@ -194,6 +194,11 @@ def train():
         b_extrin = pose2extrin_torch(b_pose)
         patch_h, patch_w = b_rgbs.shape[-2:]
 
+        if args.add_intrin_noise:
+            dxy = torch.rand(2).type_as(b_intrin) - 0.5  # half pixel
+            b_intrin = b_intrin.clone()
+            b_intrin[:, :2, 2] += dxy
+
         nerf.train()
         rgb, extra = nerf(patch_h, patch_w, b_extrin, b_intrin)
         if args.learn_loop_mask:
@@ -213,7 +218,7 @@ def train():
         # RGB loss
         if args.scale_invariant:
             scale = torch.exp(torch.log((b_rgbs + 0.01) / (rgb.detach() + 0.01)).mean())
-            scale = (scale + 1) / 2  # prevent scaling ambiguouity
+            scale = (scale + 3) / 4  # prevent scaling ambiguouity
             rgb = rgb * scale
         img_loss = img2mse(rgb, b_rgbs)
         psnr = mse2psnr(img_loss)
@@ -259,7 +264,8 @@ def train():
                              (args.patch_h_size, args.patch_w_size),
                              (args.patch_h_stride, args.patch_w_stride),
                              poses, intrins, args.vid2img_mode)
-    # visualize the image, delete afterwards
+
+    # visualize the image
     for viewi, (img, loopma) in enumerate(zip(dataset.images, dataset.dynmask)):
         p = os.path.join(expdir, expname, f"imgvis_{args.vid2img_mode}", f"{viewi:04d}.png")
         os.makedirs(os.path.dirname(p), exist_ok=True)

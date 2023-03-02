@@ -1,0 +1,6 @@
+expname = 1101grass
+datadir = data/1101grass720p
+near_factor = 0.99
+far_factor = 2.5
+sparsify_rmfirstlayer = 1
+

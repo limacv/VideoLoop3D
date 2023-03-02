@@ -1,4 +1,0 @@
-expname = loop_dense_usttap_mse
-datadir = data/usttap720p_loop
-init_from = meshlog1_dense/usttap720p_n095f15_rmlayer3_smth08_density002_loopmav2/epoch_0119.tar
-test_view_idx = 4

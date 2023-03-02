@@ -4,7 +4,6 @@ prefix = D:\MSI_NB\source\data\VideoLoops
 expname = ustfallclose720p32layer_debug
 datadir = data/fall4720p
 expdir  = meshlogs
-init_from = meshlogfinal/108fall4_n095f12_rmlayer2_smth05_density002/epoch_0119.tar
 factor = 2
 l_smooth_loss_weight = 0.1
 # sparsify_epoch = 20000

@@ -1,0 +1,6 @@
+expname = 1020rock720p
+datadir = data/1020rock720p
+near_factor = 0.98
+far_factor = 3
+sparsify_rmfirstlayer = 2
+sparsify_alpha_thresh = 0.02

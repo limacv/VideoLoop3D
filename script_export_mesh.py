@@ -4,48 +4,17 @@ import numpy as np
 import imageio
 import json
 from dataloader import load_llff_data
+from utils import save_obj_with_vcolor, save_obj_multimaterial, normalize_uv, cull_unused
 
 
-def save_obj_multimaterial(file, vertices, faces_list, uvs, uvfaces_list, mtls_list):
-    with open(file, 'w') as f:
-        for vertice in vertices:
-            f.write(f"v {vertice[0]} {vertice[1]} {vertice[2]}\n")
-        for uv in uvs:
-            f.write(f"vt {uv[0]} {uv[1]}\n")
-
-        for mtl, faces, uvfaces in zip(mtls_list, faces_list, uvfaces_list):
-            faces1 = faces + 1
-            uvfaces1 = uvfaces + 1
-            f.write(f"usemtl {mtl}\n")
-            f.write(f"s off\n")
-            for face, uvface in zip(faces1, uvfaces1):
-                f.write(f"f {face[0]}/{uvface[0]} {face[1]}/{uvface[1]} {face[2]}/{uvface[2]}\n")
-
-        f.write("\n")
-
-
-def save_obj_with_vcolor(file, verts_colors, faces, uvs, uvfaces):
-    with open(file, 'w') as f:
-        for pos_color in verts_colors:
-            f.write(f"v {pos_color[0]} {pos_color[1]} {pos_color[2]} {pos_color[3]} {pos_color[4]} {pos_color[5]}\n")
-        for uv in uvs:
-            f.write(f"vt {uv[0]} {uv[1]}\n")
-
-        faces1 = faces + 1
-        uvfaces1 = uvfaces + 1
-        for face, uvface in zip(faces1, uvfaces1):
-            f.write(f"f {face[0]}/{uvface[0]} {face[1]}/{uvface[1]} {face[2]}/{uvface[2]}\n")
-
-        f.write("\n")
-
-
-def export_mpv_repr(cfg_file, cfg_file1, prefix="D:\\MSI_NB\\source\\data\\VideoLoops"):
+def export_mpv_repr(cfg_file, cfg_file1):
     from config_parser import config_parser
     parser = config_parser()
     args = parser.parse_args(["--config", cfg_file, "--config1", cfg_file1])
 
+    prefix = args.prefix
     expname = args.expname + args.expname_postfix
-    outpath = os.path.join(prefix, "meshes", expname)
+    outpath = os.path.join(prefix, "mesh4demo", expname)
     os.makedirs(outpath, exist_ok=True)
 
     data_dir = os.path.join(prefix, args.datadir)
@@ -109,20 +78,6 @@ def export_mpv_repr(cfg_file, cfg_file1, prefix="D:\\MSI_NB\\source\\data\\Video
     assert frame_num == args.mpv_frm_num, "Error: detect unmatched frame count"
     # saving geometry
 
-    def normalize_uv(uv, h, w):
-        uv[:, 1] = -uv[:, 1]
-        uv = uv * 0.5 + 0.5
-        uv = uv * np.array([w - 1, h - 1]) / np.array([w, h]) + 0.5 / np.array([w, h])
-        return uv
-
-    def cull_unused(v, f):
-        id_unique = np.unique(f)
-        v_unique = v[id_unique]
-        id_old2new = np.ones(len(v)).astype(id_unique.dtype) * -1
-        id_old2new[id_unique] = np.arange(len(v_unique))
-        newf = id_old2new[f]
-        return v_unique, newf
-
     uvs_static = normalize_uv(uvs_static, atlas_h_static, atlas_w_static)
     uvs_dynamic = normalize_uv(uvs_dynamic, atlas_h_dynamic, atlas_w_dynamic)
 
@@ -163,55 +118,29 @@ def export_mpv_repr(cfg_file, cfg_file1, prefix="D:\\MSI_NB\\source\\data\\Video
 
 
 if __name__ == "__main__":
-    export_mpv_repr(
-        "configs/mpvgpnn_wospa.txt",
-        f"configs/mpvgpnn_final_base_tilesz/1101grass_mpvgpnn_tile64.txt",
-        "/d1/scratch/PI/psander/data/VideoLoops",
-        )
-    export_mpv_repr(
-        "configs/mpvgpnn_wospa.txt",
-        f"configs/mpvgpnn_final_base_tilesz/1101grass_mpvgpnn_tile2txt",
-        "/d1/scratch/PI/psander/data/VideoLoops",
-    )
-    export_mpv_repr(
-        "configs/mpvgpnn_wospa.txt",
-        f"configs/mpvgpnn_final_base_tilesz/1101grass_mpvgpnn_tile4.txt",
-        "/d1/scratch/PI/psander/data/VideoLoops",
-    )
-    export_mpv_repr(
-        "configs/mpvgpnn_wospa.txt",
-        f"configs/mpvgpnn_final_base_tilesz/1101grass_mpvgpnn_tile8.txt",
-        "/d1/scratch/PI/psander/data/VideoLoops",
-    )
-    export_mpv_repr(
-        "configs/mpvgpnn_wospa.txt",
-        f"configs/mpvgpnn_final_base_tilesz/1101grass_mpvgpnn_tile32.txt",
-        "/d1/scratch/PI/psander/data/VideoLoops",
-    )
-    # cfg1s = [
-    #     "108fall1narrow_mpvgpnn",
-    #     "108fall2_mpvgpnn",
-    #     "108fall3_mpvgpnn",
-    #     "108fall4_mpvgpnn",
-    #     "108fall5_mpvgpnn",
-    #     "110grasstree_mpvgpnn",
-    #     "110pillar_mpvgpnn",
-    #     "1017palm_mpvgpnn",
-    #     "1017yuanrm_mpvgpnn",
-    #     "1020rockrm_mpvgpnn",
-    #     "1020ustfall1_mpvgpnn",
-    #     "1020ustfall2_mpvgpnn",
-    #     "1101grass_mpvgpnn",
-    #     "1101towerd_mpvgpnn",
-    #     "ustfallclose_mpvgpnn",
-    #     "usttap_mpvgpnn"
-    # ]
+    cfg1s = [
+        # "108fall1",
+        # "108fall2",
+        # "108fall3",
+        "108fall4",
+        # "108fall5",
+        # "110grasstree",
+        # "110pillar",
+        # "1017palm",
+        # "1017yuan",
+        # "1020rock",
+        # "1020ustfall1",
+        # "1020ustfall2",
+        # "1101grass",
+        # "1101towerd",
+        # "ustfallclose",
+        # "usttap"
+    ]
 
-    # for cfg1 in cfg1s:
-    #     export_mpv_repr(
-    #         "configs/mpvgpnn_wospa.txt",
-    #         f"configs/mpvgpnn_final_base/{cfg1}.txt",
-    #         "/d1/scratch/PI/psander/data/VideoLoops",
-    #     )
+    for cfg1 in cfg1s:
+        export_mpv_repr(
+            "configs/mpv_base.txt",
+            f"configs/mpvs/{cfg1}.txt",
+        )
 
 

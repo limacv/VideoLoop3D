@@ -1,4 +1,0 @@
-expname = loop_sparse_1017yuan_mse
-datadir = data/1017yuan720p_loop
-init_from = meshlog1final/1017yuan720p_n095f4_rmlayer1_smth05_density002_loopmav2/epoch_0119.tar
-test_view_idx = 1

@@ -1,4 +1,0 @@
-expname = loop_sparse_110pillar_mse
-datadir = data/pillar720p_loop
-init_from = meshlog1final/110pillar_n09f12_rmlayer4_smth05_density002_loopmav2/epoch_0119.tar
-test_view_idx = 3

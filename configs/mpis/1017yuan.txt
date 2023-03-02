@@ -1,0 +1,5 @@
+expname = 1017yuan720p
+datadir = data/1017yuan720p
+near_factor = 0.95
+far_factor = 4
+sparsify_rmfirstlayer = 1

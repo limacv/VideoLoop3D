@@ -8,7 +8,6 @@ import cv2
 from utils import *
 from NeRF_modules import get_embedder
 from utils_mpi import *
-import trimesh
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer import (
     look_at_view_transform,
@@ -55,7 +54,6 @@ class MPMesh(nn.Module):
         assert ref_extrin.shape == (4, 4) and ref_intrin.shape == (3, 3)
         self.register_buffer("ref_extrin", torch.tensor(ref_extrin))
         self.register_buffer("ref_intrin", torch.tensor(ref_intrin).float())
-
         # construct the vertices
         planedepth = make_depths(self.mpi_d, near, far).float().flip(0)
         self.register_buffer("planedepth", planedepth)
@@ -174,6 +172,9 @@ class MPMesh(nn.Module):
         #         self.uvs *= uv_scaling
 
     def init_from_mpi(self, state_dict):
+        """
+        Warning: this function is not well tested. It's currently unused
+        """
         self._verts.data = state_dict['_verts'].type_as(self._verts)
         self.uvs.data = state_dict['uvs'].type_as(self.uvs)
         self.atlas.data = state_dict['atlas'].type_as(self.atlas)
@@ -220,18 +221,22 @@ class MPMesh(nn.Module):
         return state_dict
 
     def save_mesh(self, prefix):
-        vertices, faces, uvs = self.verts.detach(), self.faces.detach(), self.uvs.detach()
-        mesh1 = trimesh.Trimesh(vertices.cpu().numpy(), faces.cpu().numpy())
-        txt = mesh1.export(prefix + ".obj", "obj")
-        with open(prefix + ".obj", 'w') as f:
-            f.write(txt)
+        vertices, faces = self.verts.detach(), self.faces.detach()
+        uvs = self.uvs.detach().cpu().numpy()
+        uvfaces = self.uvfaces.detach().cpu().numpy()
+        uvs = normalize_uv(uvs, self.atlas.shape[2], self.atlas.shape[3])
+        print(f"Saving to {prefix}: # v = {len(vertices)}, # f = {len(faces)}")
+        save_obj(prefix + ".obj", vertices.cpu().numpy(), faces.cpu().numpy(),
+                                    uvs, uvfaces)
 
         if self.has_dyn:
-            faces_dyn = self.faces_dyn
-            mesh_dyn = trimesh.Trimesh(vertices.cpu().numpy(), faces_dyn.cpu().numpy())
-            txt = mesh_dyn.export(prefix + "_dyn.obj", "obj")
-            with open(prefix + "_dyn.obj", 'w') as f:
-                f.write(txt)
+            faces_dyn = self.faces_dyn.detach()
+            uvs = self.uvs_dyn.detach().cpu().numpy()
+            uvfaces = self.uvfaces_dyn.detach().cpu().numpy()
+            uvs = normalize_uv(uvs, self.atlas_dyn.shape[2], self.atlas_dyn.shape[3])
+            print(f"Saving to {prefix + '_dyn.obj'}: # v = {len(vertices)}, # f = {len(faces_dyn)}")
+            save_obj(prefix + "_dyn.obj", vertices.cpu().numpy(), faces_dyn.cpu().numpy(),
+                                      uvs, uvfaces)
 
     @torch.no_grad()
     def save_texture(self, prefix):
@@ -267,6 +272,9 @@ class MPMesh(nn.Module):
 
     @torch.no_grad()
     def direct2sh(self):
+        """
+        Warning: this function is not well tested
+        """
         self.view_embed_fn, self.view_cnl = get_embedder(self.args.multires_views, input_dim=3)
         self.rgb_mlp_type = 'rgb_sh'
         atlas_cnl = 3 * 4 + 1  # 9 for each channel
@@ -280,6 +288,9 @@ class MPMesh(nn.Module):
 
     @torch.no_grad()
     def sparsify_faces(self, erode_num=2, alpha_thresh=0.03, loop_thresh=0.5):
+        """
+        Tile Culling Algorithm in paper
+        """
         print("Sparsifying the faces")
         # faces of a quad: 0 - 1
         #                  | \ |
@@ -344,10 +355,6 @@ class MPMesh(nn.Module):
 
         mask = (atlases_alpha.max(dim=-1)[0] > alpha_thresh)
         mask_loop = (atlases_loop.max(dim=-1)[0] > loop_thresh)
-
-        # mask[::10] = True
-        # mask_loop[::20] = True
-        # # TODO: delete this
 
         mask_loop = torch.logical_and(mask, mask_loop)
         mask_loop_short = mask_loop[mask]
@@ -444,6 +451,9 @@ class MPMesh(nn.Module):
         return verts
 
     def render(self, H, W, extrin, intrin):
+        """
+        Main function that perform rendering
+        """
         B = len(extrin)
         verts = self.verts.reshape(1, -1, 3)
         with torch.set_grad_enabled(self.optimize_geometry):
@@ -506,6 +516,13 @@ class MPMesh(nn.Module):
         def render_masked_rgba(mask_, atlas_, uvs_):
             if len(uvs_) == 0:
                 return torch.zeros(0, 4).type_as(atlas_)
+
+            if self.args.add_uv_noise and self.training:
+                b_, cnl_, h_, w_ = atlas_.shape
+                hpix = torch.tensor([[1 / (w_ - 1), 1 / (h_ - 1)]]).type_as(uvs_)
+                rand = torch.rand(uvs_.shape).type_as(uvs_) * 2 - 1
+                uvs_ = uvs_ + hpix * rand
+
             mask_flat_ = mask_.reshape(-1)
             ray_direction_ = ray_direction[..., None, :].expand(mask_.shape + (3,))
             ray_d_ = ray_direction_.reshape(-1, 3)[mask_flat_, :]

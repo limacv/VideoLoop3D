@@ -1,4 +1,0 @@
-expname = loop_sparse_1101ustpalm_mse
-datadir = data/1101ustpalm720p_loop
-init_from = meshlog1final/1101ustpalm_n09f4_rmlayer0_smth05_density002_loopmav2/epoch_0119.tar
-test_view_idx = 4

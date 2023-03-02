@@ -362,3 +362,75 @@ def compute_loopable_mask(vid, eps=15 / 255, factor=2):
     label_smooth = cv2.resize(label_smooth.astype(np.float32), ori_size[::-1], None)
     loopable_smooth = label_smooth.argmax(axis=-1) == 0
     return loopable_smooth
+
+
+def save_obj_multimaterial(file, vertices, faces_list, uvs, uvfaces_list, mtls_list):
+    with open(file, 'w') as f:
+        for vertice in vertices:
+            f.write(f"v {vertice[0]} {vertice[1]} {vertice[2]}\n")
+        for uv in uvs:
+            f.write(f"vt {uv[0]} {uv[1]}\n")
+
+        for mtl, faces, uvfaces in zip(mtls_list, faces_list, uvfaces_list):
+            faces1 = faces + 1
+            uvfaces1 = uvfaces + 1
+            f.write(f"usemtl {mtl}\n")
+            f.write(f"s off\n")
+            for face, uvface in zip(faces1, uvfaces1):
+                f.write(f"f {face[0]}/{uvface[0]} {face[1]}/{uvface[1]} {face[2]}/{uvface[2]}\n")
+
+        f.write("\n")
+
+
+def save_obj_with_vcolor(file, verts_colors, faces, uvs, uvfaces):
+    with open(file, 'w') as f:
+        for pos_color in verts_colors:
+            f.write(f"v {pos_color[0]} {pos_color[1]} {pos_color[2]} {pos_color[3]} {pos_color[4]} {pos_color[5]}\n")
+        for uv in uvs:
+            f.write(f"vt {uv[0]} {uv[1]}\n")
+
+        faces1 = faces + 1
+        uvfaces1 = uvfaces + 1
+        for face, uvface in zip(faces1, uvfaces1):
+            f.write(f"f {face[0]}/{uvface[0]} {face[1]}/{uvface[1]} {face[2]}/{uvface[2]}\n")
+
+        f.write("\n")
+
+
+# Mesh utility
+
+
+def normalize_uv(uv, h, w):
+    uv[:, 1] = -uv[:, 1]
+    uv = uv * 0.5 + 0.5
+    uv = uv * np.array([w - 1, h - 1]) / np.array([w, h]) + 0.5 / np.array([w, h])
+    return uv
+
+
+def cull_unused(v, f):
+    id_unique = np.unique(f)
+    v_unique = v[id_unique]
+    id_old2new = np.ones(len(v)).astype(id_unique.dtype) * -1
+    id_old2new[id_unique] = np.arange(len(v_unique))
+    newf = id_old2new[f]
+    return v_unique, newf
+
+
+def save_obj(file, verts, faces, uvs, uvfaces, rm_unused=True):
+    if rm_unused:
+        verts, faces = cull_unused(verts, faces)
+        uvs, uvfaces = cull_unused(uvs, uvfaces)
+
+    with open(file, 'w') as f:
+        for pos_color in verts:
+            f.write(f"v {pos_color[0]} {pos_color[1]} {pos_color[2]}\n")
+        for uv in uvs:
+            f.write(f"vt {uv[0]} {uv[1]}\n")
+
+        faces1 = faces + 1
+        uvfaces1 = uvfaces + 1
+        for face, uvface in zip(faces1, uvfaces1):
+            f.write(f"f {face[0]}/{uvface[0]} {face[1]}/{uvface[1]} {face[2]}/{uvface[2]}\n")
+
+        f.write("\n")
+

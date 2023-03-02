@@ -1,0 +1,6 @@
+expname = 108fall5
+datadir = data/fall5720p
+near_factor = 0.98
+far_factor = 2
+sparsify_rmfirstlayer = 0
+sparsify_alpha_thresh = 0.03

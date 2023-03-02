@@ -1,0 +1,7 @@
+expname = 1020ustfall1
+datadir = data/1020ustfall1720p
+init_from = postrebuttal_mpi/1020ustfall1720p/epoch_0119.tar
+mpv_frm_num = 60
+test_view_idx = 4
+
+loss_ref_idx = 3,7

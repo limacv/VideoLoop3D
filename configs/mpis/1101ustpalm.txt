@@ -1,0 +1,5 @@
+expname = 1101ustpalm
+datadir = data/1101ustpalm720p
+near_factor = 0.9
+far_factor = 4
+sparsify_rmfirstlayer = 2

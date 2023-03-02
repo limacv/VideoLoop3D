@@ -1,0 +1,8 @@
+expname = 1101towerd
+datadir = data/1101towerd720p
+near_factor = 0.95
+far_factor = 2
+sparsify_rmfirstlayer = 2
+sparsify_alpha_thresh = 0.05
+
+sparsity_loss_weight = 0.001

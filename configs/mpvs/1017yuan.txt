@@ -1,0 +1,7 @@
+expname = 1017yuan
+datadir = data/1017yuan720p
+init_from = postrebuttal_mpi/1017yuan720p/epoch_0119.tar
+mpv_frm_num = 50
+test_view_idx = 1
+
+loss_ref_idx = 2,6

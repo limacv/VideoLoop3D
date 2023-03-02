@@ -220,6 +220,11 @@ def train(args):
         b_extrin = pose2extrin_torch(b_pose)
         patch_h, patch_w = b_rgbs.shape[-2:]
 
+        if args.add_intrin_noise:
+            dxy = torch.rand(2).type_as(b_intrin) - 0.5  # half pixel
+            b_intrin = b_intrin.clone()
+            b_intrin[:, :2, 2] += dxy
+
         nerf.train()
         rgb, extra = nerf(patch_h, patch_w, b_extrin, b_intrin, res=b_rgbs, losscfg=loss_cfg)
 

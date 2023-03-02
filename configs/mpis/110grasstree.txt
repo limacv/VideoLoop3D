@@ -1,0 +1,6 @@
+expname = 110grasstree
+datadir = data/grasstree720p
+near_factor = 0.95
+far_factor = 5
+sparsify_rmfirstlayer = 2
+

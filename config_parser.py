@@ -45,6 +45,10 @@ def config_parser():
                         help='path to ckpt, will add prefix, currently only support reload from MPI')
     parser.add_argument("--init_std", type=float, default=0,
                         help='noise std of the dynamic MPV')
+    parser.add_argument("--add_uv_noise", action='store_true',
+                        help='add noise to uv')
+    parser.add_argument("--add_intrin_noise", action='store_true',
+                        help='add noise to intrinsic')
 
     # loss config
     parser.add_argument("--loss_ref_idx", type=str, default='0',

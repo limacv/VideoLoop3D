@@ -1,0 +1,7 @@
+expname = 108fall2
+datadir = data/fall2720p
+init_from = postrebuttal_mpi/108fall2/epoch_0119.tar
+mpv_frm_num = 50
+test_view_idx = 4
+
+loss_ref_idx = 0,6

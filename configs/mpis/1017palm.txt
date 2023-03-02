@@ -1,0 +1,6 @@
+expname = 1017palm
+datadir = data/1017palm720p
+near_factor = 0.98
+far_factor = 3
+sparsify_rmfirstlayer = 1
+
