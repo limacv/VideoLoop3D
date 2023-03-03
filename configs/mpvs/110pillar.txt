@@ -1,6 +1,6 @@
 expname = 110pillar
 datadir = data/pillar720p
-init_from = postrebuttal_mpi/110pillar/epoch_0119.tar
+init_from = mpis/110pillar/epoch_0119.tar
 mpv_frm_num = 50
 test_view_idx = 3
 

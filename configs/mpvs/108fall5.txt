@@ -1,6 +1,6 @@
 expname = 108fall5
 datadir = data/fall5720p
-init_from = postrebuttal_mpi/108fall5/epoch_0119.tar
+init_from = mpis/108fall5/epoch_0119.tar
 mpv_frm_num = 50
 test_view_idx = 4
 

@@ -1,6 +1,6 @@
 expname = 110grasstree
 datadir = data/grasstree720p
-init_from = postrebuttal_mpi/110grasstree/epoch_0119.tar
+init_from = mpis/110grasstree/epoch_0119.tar
 mpv_frm_num = 50
 test_view_idx = 4
 

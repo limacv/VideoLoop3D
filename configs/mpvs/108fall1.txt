@@ -1,6 +1,6 @@
 expname = 108fall1
 datadir = data/fall1narrow720p
-init_from = postrebuttal_mpi/108fall1/epoch_0119.tar
+init_from = mpis/108fall1/epoch_0119.tar
 mpv_frm_num = 50
 test_view_idx = 4
 
