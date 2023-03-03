@@ -1,10 +1,9 @@
 gpu_num = 1
 # Dataset related
 prefix = D:\MSI_NB\source\data\VideoLoops
-expname = ustfallclose_debug
+expname = usttap_debug
 datadir = data/ustfallclose720p
-expdir  = logs
-# init_from = meshlogs\ustfallclose720p32layer_dyn_smth02_sparsity0004_cullloop_rm1st\epoch_0120.tar
+expdir  = postrebuttal_mpv
 factor = 2
 seed = 2
 model_type = MPMesh
