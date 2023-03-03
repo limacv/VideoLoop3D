@@ -1,6 +1,6 @@
 expname = 1017palm
 datadir = data/1017palm720p
-init_from = postrebuttal_mpi/1017palm/epoch_0119.tar
+init_from = mpis/1017palm/epoch_0119.tar
 mpv_frm_num = 60
 test_view_idx = 0
 

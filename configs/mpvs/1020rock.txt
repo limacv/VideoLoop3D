@@ -1,6 +1,6 @@
 expname = 1020rock
 datadir = data/1020rock720p
-init_from = postrebuttal_mpi/1020rock720p/epoch_0119.tar
+init_from = mpis/1020rock720p/epoch_0119.tar
 mpv_frm_num = 50
 test_view_idx = 0
 

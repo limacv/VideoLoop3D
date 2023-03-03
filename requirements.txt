@@ -1,3 +1,4 @@
+torch==1.10
 imageio
 imageio-ffmpeg
 tensorboard
@@ -7,3 +8,5 @@ unfoldNd
 pytorch_msssim
 scikit-image
 configargparse
+tqdm
+pytorch3d

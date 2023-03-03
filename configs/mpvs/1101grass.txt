@@ -1,6 +1,6 @@
 expname = 1101grass
 datadir = data/1101grass720p
-init_from = postrebuttal_mpi/1101grass/epoch_0119.tar
+init_from = mpis/1101grass/epoch_0119.tar
 mpv_frm_num = 50
 test_view_idx = 5
 

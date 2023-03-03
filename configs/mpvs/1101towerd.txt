@@ -1,6 +1,6 @@
 expname = 1101towerd
 datadir = data/1101towerd720p
-init_from = postrebuttal_mpi/1101towerd/epoch_0119.tar
+init_from = mpis/1101towerd/epoch_0119.tar
 mpv_frm_num = 60
 test_view_idx = 6
 
