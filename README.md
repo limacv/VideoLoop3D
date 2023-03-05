@@ -128,9 +128,19 @@ python script_owndata_step2_genllffpose.py \
     --scenedir <dataset_dir>
 ```
 
+### 7.3 decide config file
+
+Create your own config file. Pay attention to the following configs:
+- ```near_factor``` and ```far_factor```: control the near and far plane of the MPI. There is ```close``` and ```far``` parameters automatically computed from the reconstructed point cloud by the llff pose estimation script. The final close plane and far plane will be ```near_factor * near``` and ```far_factor * far```, so you can manually tune the near/far plane using the *_factor.
+- ```sparsify_rmfirstlayer```: this config is pretty dirty. We find that sometimes in the 1st stage, the view-inconsistency of the input will be baked in some nearest planes. So you can choose to manually filter out these planes and how many planes to remove in the tile culling process is controlled by ```sparsify_rmfirstlayer```.
+- ```mpv_frm_num```: this is the frame number to be optimized.
+- ```loss_ref_idx```: when compute the looping loss, we find that setting a large patch size for every view leads to blurry, while a small patch leads to spatial inconsistency. Therefore we set a large patch size to only a few "reference" views, which is specified by ```loss_ref_idx```.
+
 ## Other Notes
 
 - Implementation details for the looping loss:
     - Pytorch unfold eats lots of GPU memory. Since the looping loss is computed for each pixel location, we save the memory by looping through macro_block, which yields same results but lower memory usage.
     - Instead of directly computing the loss between Q and K, we first assemble a retargeted video loop by folding the K<sub>f(i)</sub>. We find that this operation greatly reduces the training memory and training time.
+    - We use different patch size for different view, as is illustrated in 7.3.
 - In each iteration, we randomly perturb the camera intrinsic for half pixel (i.e. cx += rand() - 0.5, same for cy). We find this can reduce the tiling artifact. See the demo [here](https://limacv.github.io/VideoLoopUI/?dataurl=assets/ustfall1_tiling) for adding this perturb and [here](https://limacv.github.io/VideoLoopUI/?dataurl=assets/ustfall1) for without perturb. There is still some artifact when render in high resolution (the training is conducted in 640x360).
+- Adaptive learning rate. We find that directly optimizing so much parameters, with each iteration only involve small number of parameters will lead to very noisy optimization results. This is because the Moment term in the optimizer will keep part of the parameters updating even if it has no gradient. We find that scaling the learning rate by the average frequency one parameter will have gradient solves the problem.

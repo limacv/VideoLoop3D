@@ -130,30 +130,27 @@ def train():
     writer = SummaryWriter(os.path.join(expdir, expname))
 
     # Create log dir and copy the config file
-    if not args.render_only:
-        file_path = os.path.join(expdir, expname, f"source_{datetime.now().timestamp():.0f}")
-        os.makedirs(file_path, exist_ok=True)
-        f = os.path.join(file_path, 'args.txt')
+    file_path = os.path.join(expdir, expname, f"source_{datetime.now().timestamp():.0f}")
+    os.makedirs(file_path, exist_ok=True)
+    f = os.path.join(file_path, 'args.txt')
+    with open(f, 'w') as file:
+        for arg in sorted(vars(args)):
+            attr = getattr(args, arg)
+            file.write('{} = {}\n'.format(arg, attr))
+    if args.config is not None:
+        f = os.path.join(file_path, 'config.txt')
         with open(f, 'w') as file:
-            for arg in sorted(vars(args)):
-                attr = getattr(args, arg)
-                file.write('{} = {}\n'.format(arg, attr))
-        if args.config is not None:
-            f = os.path.join(file_path, 'config.txt')
-            with open(f, 'w') as file:
-                file.write(open(args.config, 'r').read())
-        if args.config1 is not None and len(args.config1) > 0:
-            f = os.path.join(file_path, 'config1.txt')
-            with open(f, 'w') as file:
-                file.write(open(args.config1, 'r').read())
-        files_copy = [fs for fs in os.listdir(".") if ".py" in fs]
-        for fc in files_copy:
-            shutil.copyfile(f"./{fc}", os.path.join(file_path, fc))
+            file.write(open(args.config, 'r').read())
+    if args.config1 is not None and len(args.config1) > 0:
+        f = os.path.join(file_path, 'config1.txt')
+        with open(f, 'w') as file:
+            file.write(open(args.config1, 'r').read())
+    files_copy = [fs for fs in os.listdir(".") if ".py" in fs]
+    for fc in files_copy:
+        shutil.copyfile(f"./{fc}", os.path.join(file_path, fc))
 
     # Create nerf model
-    if args.model_type == "MPI":
-        nerf = MPI(args, H, W, ref_extrin, ref_intrin, ref_near, ref_far)
-    elif args.model_type == "MPMesh":
+    if args.model_type == "MPMesh":
         nerf = MPMesh(args, H, W, ref_extrin, ref_intrin, ref_near, ref_far)
     else:
         raise RuntimeError(f"Unrecognized model type {args.model_type}")

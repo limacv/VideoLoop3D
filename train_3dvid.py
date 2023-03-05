@@ -123,25 +123,24 @@ def train(args):
     writer = SummaryWriter(os.path.join(expdir, expname))
 
     # Create log dir and copy the config file
-    if not args.render_only:
-        file_path = os.path.join(expdir, expname, f"source_{datetime.now().timestamp():.0f}")
-        os.makedirs(file_path, exist_ok=True)
-        f = os.path.join(file_path, 'args.txt')
+    file_path = os.path.join(expdir, expname, f"source_{datetime.now().timestamp():.0f}")
+    os.makedirs(file_path, exist_ok=True)
+    f = os.path.join(file_path, 'args.txt')
+    with open(f, 'w') as file:
+        for arg in sorted(vars(args)):
+            attr = getattr(args, arg)
+            file.write('{} = {}\n'.format(arg, attr))
+    if len(args.config) > 0:
+        f = os.path.join(file_path, 'config.txt')
         with open(f, 'w') as file:
-            for arg in sorted(vars(args)):
-                attr = getattr(args, arg)
-                file.write('{} = {}\n'.format(arg, attr))
-        if len(args.config) > 0:
-            f = os.path.join(file_path, 'config.txt')
-            with open(f, 'w') as file:
-                file.write(open(args.config, 'r').read())
-        if len(args.config1) > 0:
-            f = os.path.join(file_path, 'config1.txt')
-            with open(f, 'w') as file:
-                file.write(open(args.config1, 'r').read())
-        files_copy = [fs for fs in os.listdir(".") if ".py" in fs]
-        for fc in files_copy:
-            shutil.copyfile(f"./{fc}", os.path.join(file_path, fc))
+            file.write(open(args.config, 'r').read())
+    if len(args.config1) > 0:
+        f = os.path.join(file_path, 'config1.txt')
+        with open(f, 'w') as file:
+            file.write(open(args.config1, 'r').read())
+    files_copy = [fs for fs in os.listdir(".") if ".py" in fs]
+    for fc in files_copy:
+        shutil.copyfile(f"./{fc}", os.path.join(file_path, fc))
 
     # Create nerf model
     if args.model_type == "MPMesh":
@@ -221,7 +220,7 @@ def train(args):
         patch_h, patch_w = b_rgbs.shape[-2:]
 
         if args.add_intrin_noise:
-            dxy = torch.rand(2).type_as(b_intrin) - 0.4  # half pixel
+            dxy = torch.rand(2).type_as(b_intrin) - 0.5  # half pixel
             b_intrin = b_intrin.clone()
             b_intrin[:, :2, 2] += dxy
 
