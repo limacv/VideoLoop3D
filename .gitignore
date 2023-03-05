@@ -1,5 +1,0 @@
-*.pth
-*.xml
-/evaluations/lpips/
-.idea
-/evaluations/c3d.pickle
