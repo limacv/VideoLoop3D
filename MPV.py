@@ -550,19 +550,6 @@ class MPMeshVid(nn.Module):
                 d_smooth = depth_grad.mean()
                 extra["d_smooth"] = d_smooth.reshape(1, -1)
 
-            if self.args.laplacian_loss_weight > 0:
-                verts = self.verts.reshape(self.mpi_d, self.mpi_h_verts, self.mpi_w_verts, -1)
-                verts_pad = torch.cat([
-                    verts[:, :, :1] * 2 - verts[:, :, 1:2], verts, verts[:, :, -1:] * 2 - verts[:, :, -2:-1]
-                ], dim=2)
-                verts_pad = torch.cat([
-                    verts_pad[:, :1] * 2 - verts_pad[:, 1:2], verts_pad, verts_pad[:, -1:] * 2 - verts_pad[:, -2:-1]
-                ], dim=1)
-                verts_laplacian_x = (verts_pad[:, :-2, 1:-1] + verts_pad[:, 2:, 1:-1]) / 2
-                verts_laplacian_y = (verts_pad[:, 1:-1, :-2] + verts_pad[:, 1:-1, 2:]) / 2
-                verts_laplacian = (verts_laplacian_y - verts).norm(dim=-1) + (verts_laplacian_x - verts).norm(dim=-1)
-                extra["laplacian"] = verts_laplacian.mean().reshape(1, -1)
-
             return None, extra
 
         else:  # if not self.training:
