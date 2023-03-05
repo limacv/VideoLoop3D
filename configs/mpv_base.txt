@@ -43,7 +43,6 @@ pyr_minimal_dim = 65
 pyr_num_epoch = 50
 pyr_factor = 0.75
 init_std = 0.02
-add_uv_noise
 mpv_isloop
 
 

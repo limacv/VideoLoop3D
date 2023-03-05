@@ -24,10 +24,10 @@ from evaluations.NNMSE import compute_nnerr
 # Flag
 COMPUTE_STATIC = True
 COMPUTE_DYN = True
-COMPUTE_LPIPS = False
-COMPUTE_NNMSE = False
-COMPUTE_LOOPQ = False
-COMPUTE_SVFID = False
+COMPUTE_LPIPS = True
+COMPUTE_NNMSE = True
+COMPUTE_LOOPQ = True
+COMPUTE_SVFID = True
 
 
 def evaluate(args):

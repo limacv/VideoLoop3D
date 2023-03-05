@@ -1,6 +1,8 @@
 # 3D Video Loops from Asynchronous Input
 This repository is the official code for the CVPR23 paper: **3D Video Loops from Asynchronous Input**. Please visit our [project page](https://limacv.github.io/VideoLoop3D_web/) for more information, such as supplementary, demo and dataset.
 
+![Teaser](teaser.jpg)
+
 ## 1. Introduction
 In this project, we construct a 3D video loop from multi-view videos that can be asynchronous. The 3D video loop is represented as MTV, a new representation, which is essentially multiple tiles with dynamic textures. This code implements the following functionality: 
 
@@ -22,6 +24,7 @@ conda create -n vloop3d python==3.8
 conda activate vloop3d
 pip install -r requirements.txt
 ```
+- Install Pytorch3D following the instructures [here](https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md).
 
 ### 2.2 dataset
 Download dataset from the link [here](https://hkustconnect-my.sharepoint.com/:f:/g/personal/lmaag_connect_ust_hk/EiZnIyUYmJdLpQ5hiLtkz8IBfAyeoUiXHt5H0-pFgzV9cg?e=OBNIas). Place them somewhere. For example, you've placed ```fall2720p``` in ```<data_dir>/fall2720p```.
@@ -76,9 +79,54 @@ This will generate mesh files under ```<prefix>/<expdir>/meshes/<expname>```.
 
 Please refer to [this repo](https://github.com/limacv/VideoLoopUI) for more details.
 
-## Using your own data
+## 7. Using your own data
 
-TODO
+The dataset file structure is fairly straightfoward, and the camera pose file 
+follows those in the [LLFF dataset](https://github.com/Fyusion/LLFF) in the NeRF paper.
+So it should be easy to create and structure your own dataset. 
+
+But still, we provide some simple scripts to help create your own dataset.
+
+### 7.0 capture your data
+
+One limitation of our method is that 
+we only support scenes with textural motion and repeatitive pattern.
+So the best practice is to capture water flows. 
+
+During capturing, the best option is to use a tripod, 
+which perfectly guarantees the camera pose to be static. 
+If you hand-hold your camera, make sure it's still, and later
+you can stabilize the video using software. 
+But this may lead to artifact in the results (also a future work).
+
+Also make sure there is enough static region so that the COLMAP works.
+
+### 7.1 structuralize data
+
+I usually start by using video editing softwares to 
+concatenate multi-view videos into a long video, 
+with each interval have some black frames. 
+This helps to standardize the fps, remove the sound, stabilize, etc.
+
+Then run the following to create a structured dataset: 
+```
+cd scripts
+python script_owndata_step1_standardization.py \
+    --input_path <video_name> \
+    --output_prefix <dataset_dir>
+```
+
+### 7.2 pose estimation
+
+Make sure you install the [COLMAP](https://colmap.github.io/). 
+Then assign the colmap executable path to variable ```colmap_path``` 
+in the file ```scripts/colmaps/llffposes/colmap_wrapper.py```
+
+Then run:
+```
+python script_owndata_step2_genllffpose.py \
+    --scenedir <dataset_dir>
+```
 
 ## Other Notes
 

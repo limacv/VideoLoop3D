@@ -9,4 +9,3 @@ pytorch_msssim
 scikit-image
 configargparse
 tqdm
-pytorch3d
