@@ -7,7 +7,6 @@ import imageio
 import time
 import cv2
 from utils import *
-from NeRF_modules import get_embedder
 from utils_mpi import *
 from utils_vid import Patch3DGPNNDirectLoss, Patch3DMSE, Patch3DAvg, \
     Patch3DGPNNLowMemLoss, Patch3DGPNNLowMemDownSampleLoss
@@ -103,8 +102,7 @@ class MPMeshVid(nn.Module):
         self.optimize_geometry = False
         self.register_parameter("atlas_dyn", nn.Parameter(atlas_dyn, requires_grad=True))
         self.register_parameter("atlas", nn.Parameter(atlas, requires_grad=True))
-
-        self.view_embed_fn, self.view_cnl = get_embedder(args.multires_views, input_dim=3)
+        
         self.rgb_mlp_type = args.rgb_mlp_type
         if self.rgb_mlp_type == "direct":
             self.feat2rgba = lambda x: x[..., :4]
@@ -113,11 +111,11 @@ class MPMeshVid(nn.Module):
             self.use_viewdirs = False
         elif self.rgb_mlp_type == "rgb_sh":
             assert self.args.atlas_cnl == 3 * 9 + 1  # one for alpha, 9 for base
-            self.feat2rgba = SphericalHarmoic_RGB(args.atlas_cnl, self.view_cnl)
+            self.feat2rgba = SphericalHarmoic_RGB(args.atlas_cnl, 3)
             self.use_viewdirs = True
         elif self.rgb_mlp_type == "rgba_sh":
             assert self.args.atlas_cnl == 4 * 9  # 9 for each channel
-            self.feat2rgba = SphericalHarmoic_RGBA(args.atlas_cnl, self.view_cnl)
+            self.feat2rgba = SphericalHarmoic_RGBA(args.atlas_cnl, 3)
             self.use_viewdirs = True
         else:
             raise RuntimeError(f"rgbmlp_type = {args.rgb_mlp_type} not recognized")

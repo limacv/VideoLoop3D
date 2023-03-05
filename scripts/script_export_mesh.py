@@ -193,7 +193,7 @@ def export_mpv_repr(args):
 
 if __name__ == "__main__":
     parser = config_parser()
-    parser.add_argument("--mesh_folder", type=str, default="postrebuttal_mesh",
+    parser.add_argument("--mesh_folder", type=str, default="meshes",
                         help='')
     args = parser.parse_args()
     export_mpv_repr(args)

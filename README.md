@@ -1,7 +1,7 @@
 # 3D Video Loops from Asynchronous Input
 This repository is the official code for the CVPR23 paper: **3D Video Loops from Asynchronous Input**. Please visit our [project page](https://limacv.github.io/VideoLoop3D_web/) for more information, such as supplementary, demo and dataset.
 
-## Introduction
+## 1. Introduction
 In this project, we construct a 3D video loop from multi-view videos that can be asynchronous. The 3D video loop is represented as MTV, a new representation, which is essentially multiple tiles with dynamic textures. This code implements the following functionality: 
 
 1. The 2-stage optimization, which is the core of the paper.
@@ -11,9 +11,9 @@ In this project, we construct a 3D video loop from multi-view videos that can be
 
 There is another WebGL based renderer implemented [here](https://github.com/limacv/VideoLoopUI), which renders the exported mesh in real time even on an old iPhone X.
 
-## Train on dataset
+## 2. Train on dataset
 
-### prerequisite
+### 2.1 prerequisite
 
 - The optimization is quite memory consuming. It requires a GPU with memory >= 24GB, e.g. RTX3090. Make sure you have enough GPU memory!
 - Install dependencies in the ```requirements.txt```
@@ -23,22 +23,22 @@ conda activate vloop3d
 pip install -r requirements.txt
 ```
 
-### dataset
+### 2.2 dataset
 Download dataset from the link [here](https://hkustconnect-my.sharepoint.com/:f:/g/personal/lmaag_connect_ust_hk/EiZnIyUYmJdLpQ5hiLtkz8IBfAyeoUiXHt5H0-pFgzV9cg?e=OBNIas). Place them somewhere. For example, you've placed ```fall2720p``` in ```<data_dir>/fall2720p```.
 
-### config path
+### 2.3 config path
 In the ```configs/mpi_base.txt``` and ```configs/mpv_base.txt```, change the ```prefix``` dir to ```<data_dir>```. 
 
 Then later all the files will be stored in the ```<prefix>/<expdir>/<expname>```. In the example it will be ```<data_dir>/mpis/108fall2``` and ```<data_dir>/mpvs/108fall2```.
 
-### stage 1:
+### 2.4 stage 1:
 In this stage, we generate static Multi-plane Image (MPI) and 3D loopable mask (typically 10-15mins).
 Run following:
 ```
 python train_3d.py --config configs/mpi_base.txt --config1 configs/mpis/$DATA_NAME.txt
 ```
 
-### stage 2:
+### 2.5 stage 2:
 After stage 1 finishes, run following. Note this will load **epoch_0119.tar** file generated in stage 1. In stage 2, we generate final 3D looping video using looping loss (typically 3-6h).
 ```
 python train_3dvid.py --config configs/mpv_base.txt --config1 configs/mpvs/$DATA_NAME.txt
@@ -46,13 +46,35 @@ python train_3dvid.py --config configs/mpv_base.txt --config1 configs/mpvs/$DATA
 
 After stage 2 finishes, you can get a 3D video loop saved as *.tar file.
 
-## Evaluation
+## 3. Offline Render
+To render the MPV, you can run the following script:
+```
+python scripts/script_render_video.py  --config configs/mpv_base.txt --config1 configs/mpvs/$DATA_NAME.txt <cfg_vt>
+```
+We offer very simple control over time and view ```<cfg_vt>```.
+- If not specify ```<cfg_vt>```: render the spiral camera pose similar as NeRF.
+- If ```<cfg_vt> = --t 0:10 --v 3```: render 3-th training pose from 0 to 10 frames. 
 
-TODO
+The rendering results will be saved at ```<prefix>/<expdir>/<expname>/renderonly/*```
 
-## Export mesh
+## 4. Evaluation
+To evaluate the results, you can run the following script:
+```
+python scripts/scripts_evaluate_ours.py --config configs/mpv_base.txt --config1 configs/mpvs/$DATA_NAME.txt
+```
+This will generate ```<prefix>/<expdir>/<expname>/eval_metrics.txt```, which contains values for each metric. 
 
-TODO
+## 5. Export mesh
+
+To export mesh:
+```
+python scripts/scripts_export_mesh.py --config configs/mpv_base.txt --config1 configs/mpvs/$DATA_NAME.txt
+```
+This will generate mesh files under ```<prefix>/<expdir>/meshes/<expname>```. 
+
+## 6. Online Renderer
+
+Please refer to [this repo](https://github.com/limacv/VideoLoopUI) for more details.
 
 ## Using your own data
 
@@ -60,5 +82,7 @@ TODO
 
 ## Other Notes
 
-- The retargeting loss: instead of directly minimizing Q - K
+- Implementation details for the looping loss:
+    - Pytorch unfold eats lots of GPU memory. Since the looping loss is computed for each pixel location, we save the memory by looping through macro_block, which yields same results but lower memory usage.
+    - Instead of directly computing the loss between Q and K, we first assemble a retargeted video loop by folding the K<sub>f(i)</sub>. We find that this operation greatly reduces the training memory and training time.
 - In each iteration, we randomly perturb the camera intrinsic for half pixel (i.e. cx += rand() - 0.5, same for cy). We find this can reduce the tiling artifact. See the demo [here](https://limacv.github.io/VideoLoopUI/?dataurl=assets/ustfall1_tiling) for adding this perturb and [here](https://limacv.github.io/VideoLoopUI/?dataurl=assets/ustfall1) for without perturb. There is still some artifact when render in high resolution (the training is conducted in 640x360).

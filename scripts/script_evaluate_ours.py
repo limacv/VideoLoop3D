@@ -24,10 +24,10 @@ from evaluations.NNMSE import compute_nnerr
 # Flag
 COMPUTE_STATIC = True
 COMPUTE_DYN = True
-COMPUTE_LPIPS = True
-COMPUTE_NNMSE = True
-COMPUTE_LOOPQ = True
-COMPUTE_SVFID = True
+COMPUTE_LPIPS = False
+COMPUTE_NNMSE = False
+COMPUTE_LOOPQ = False
+COMPUTE_SVFID = False
 
 
 def evaluate(args):
@@ -43,10 +43,8 @@ def evaluate(args):
         print(f"Warning!!! Detect data pointing to the looping dataset, "
               f"will change from {args.datadir} to {args.datadir[:-5]}")
         args.datadir = args.datadir[:-5]
-    args.expdir = "log1_ULR"
 
     datadir = os.path.join(args.prefix, args.datadir)
-    datadir_res = os.path.join(datadir + "_ULRloop", "ULR_results")
     expdir = os.path.join(args.prefix, args.expdir)
     videos, FPS, poses, intrins, bds, render_poses, render_intrins = \
         load_mv_videos(basedir=datadir,
@@ -70,18 +68,58 @@ def evaluate(args):
     loopmasks = [compute_loopable_mask(v_ / 255) for v_ in videos]
     loopmasks = [- np.array(m_).astype(np.float32) + 1 for m_ in loopmasks]
     ref_pose = poses_avg(poses)[:, :4]
+    ref_extrin = pose2extrin_np(ref_pose)
+    ref_intrin = intrins[0]
+    ref_near, ref_far = bds.min(), bds.max()
+
+    # Create nerf model
+    if args.model_type == "MPMesh":
+        args.mpi_h_scale = args.mpi_w_scale = 0.01
+        nerf = MPMeshVid(args, H, W, ref_extrin, ref_intrin, ref_near, ref_far)
+    else:
+        raise RuntimeError(f"Unrecognized model type {args.model_type}")
+
+    nerf = nn.DataParallel(nerf, list(range(args.gpu_num)))
+    nerf.to(device)
+    extrins = pose2extrin_np(poses)
+    extrins = torch.tensor(extrins).float()
+    poses = torch.tensor(poses).float()
+    intrins = torch.tensor(intrins).float()
+
+    ##########################
+    # load from checkpoint
+    ckpts = [os.path.join(expdir, expname, f)
+             for f in sorted(os.listdir(os.path.join(expdir, expname))) if 'tar' in f]
+    if len(ckpts) > 0:
+        ckpt_path = ckpts[-1]
+        print(f"Using ckpt {ckpt_path}")
+    else:
+        raise RuntimeError("Failed, cannot find any ckpts")
+    print('Reloading from', ckpt_path)
+    ckpt = torch.load(ckpt_path)
+
+    state_dict = ckpt['network_state_dict']
+    nerf.module.init_from_mpi(state_dict)
+    nerf.to(device)
 
     # ##########################
-    # evaluating
+    # evaluating ours
     # ##########################
     ours_rgb = []
     print('Begin')
     moviebase = os.path.join(expdir, expname, f'eval_')
-    os.makedirs(os.path.join(expdir, expname), exist_ok=True)
     with torch.no_grad():
-        for viewi in test_view:
-            rgb = imageio.mimread(os.path.join(datadir_res, f"{viewi:04d}.mp4"), memtest=False)
-            rgb = np.array(rgb)
+        nerf.eval()
+
+        for viewi in range(V):
+            torch.cuda.empty_cache()
+            r_pose = extrins[viewi: viewi + 1]
+            r_intrin = intrins[viewi: viewi + 1]
+            ts = torch.arange(nerf.module.frm_num).long()
+            rgb = [nerf(H, W, r_pose, r_intrin, ts[ti: ti + 2])[0] for ti in range(0, len(ts), 2)]
+            rgb = torch.concat(rgb)
+            rgb = rgb.permute(0, 2, 3, 1).cpu().numpy()
+            rgb = to8b(rgb)
             ours_rgb.append(rgb)
 
         # ########################
@@ -113,7 +151,7 @@ def evaluate(args):
             print("computing static error")
             static_psnr = []
             static_ssim = []
-            from metrics import compute_img_metric
+            from evaluations.metrics import compute_img_metric
             for viewi in trange(V):
                 gt = videos[viewi]
                 pred = ours_rgb[viewi]

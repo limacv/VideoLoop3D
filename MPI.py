@@ -6,7 +6,6 @@ import imageio
 import time
 import cv2
 from utils import *
-from NeRF_modules import get_embedder
 from utils_mpi import *
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer import (
@@ -94,7 +93,8 @@ class MPMesh(nn.Module):
         self.register_parameter("uvs", nn.Parameter(uvs, requires_grad=True))
 
         # configure and initializing the atlas
-        self.view_embed_fn, self.view_cnl = get_embedder(args.multires_views, input_dim=3)
+        self.view_embed_fn = lambda x: x
+        self.view_cnl = 3
         self.rgb_mlp_type = args.rgb_mlp_type
         if args.rgb_mlp_type == "direct":
             self.feat2rgba = lambda x: x[..., :4]
@@ -275,7 +275,6 @@ class MPMesh(nn.Module):
         """
         Warning: this function is not well tested
         """
-        self.view_embed_fn, self.view_cnl = get_embedder(self.args.multires_views, input_dim=3)
         self.rgb_mlp_type = 'rgb_sh'
         atlas_cnl = 3 * 4 + 1  # 9 for each channel
         atlas = torch.zeros((1, atlas_cnl, self.atlas.shape[-2], self.atlas.shape[-1])).type_as(self.atlas)

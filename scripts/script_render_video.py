@@ -160,7 +160,7 @@ if __name__ == '__main__':
     parser.add_argument("--f", type=int, default=-1,
                         help='overwrite the frame number when loading the render pose')
     parser.add_argument("--type", type=str, default='vid',
-                        help='choose among seq, vid, depth, depthrgb')
+                        help='choose among seq, vid')
     parser.add_argument("--render_scaling", type=float, default=1,
                         help='radius of the render spire')
 
