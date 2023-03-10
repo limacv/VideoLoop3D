@@ -52,7 +52,8 @@ After stage 2 finishes, you can get a 3D video loop saved as *.tar file.
 ## 3. Offline Render
 To render the MPV, you can run the following script:
 ```
-python scripts/script_render_video.py  --config configs/mpv_base.txt --config1 configs/mpvs/$DATA_NAME.txt <cfg_vt>
+export PYTHONPATH=.:$PYTHONPATH
+PYTHONPATH=.:$PYTHONPATH python scripts/script_render_video.py  --config configs/mpv_base.txt --config1 configs/mpvs/$DATA_NAME.txt <cfg_vt>
 ```
 We offer very simple control over time and view ```<cfg_vt>```.
 - If not specify ```<cfg_vt>```: render the spiral camera pose similar as NeRF.
@@ -63,6 +64,7 @@ The rendering results will be saved at ```<prefix>/<expdir>/<expname>/renderonly
 ## 4. Evaluation
 To evaluate the results, you can run the following script:
 ```
+export PYTHONPATH=.:$PYTHONPATH
 python scripts/scripts_evaluate_ours.py --config configs/mpv_base.txt --config1 configs/mpvs/$DATA_NAME.txt
 ```
 This will generate ```<prefix>/<expdir>/<expname>/eval_metrics.txt```, which contains values for each metric. 
@@ -71,6 +73,7 @@ This will generate ```<prefix>/<expdir>/<expname>/eval_metrics.txt```, which con
 
 To export mesh:
 ```
+export PYTHONPATH=.:$PYTHONPATH
 python scripts/scripts_export_mesh.py --config configs/mpv_base.txt --config1 configs/mpvs/$DATA_NAME.txt
 ```
 This will generate mesh files under ```<prefix>/<expdir>/meshes/<expname>```. 
@@ -144,3 +147,19 @@ Create your own config file. Pay attention to the following configs:
     - We use different patch size for different view, as is illustrated in 7.3.
 - In each iteration, we randomly perturb the camera intrinsic for half pixel (i.e. cx += rand() - 0.5, same for cy). We find this can reduce the tiling artifact. See the demo [here](https://limacv.github.io/VideoLoopUI/?dataurl=assets/ustfall1_tiling) for adding this perturb and [here](https://limacv.github.io/VideoLoopUI/?dataurl=assets/ustfall1) for without perturb. There is still some artifact when render in high resolution (the training is conducted in 640x360).
 - Adaptive learning rate. We find that directly optimizing so much parameters, with each iteration only involve small number of parameters will lead to very noisy optimization results. This is because the Moment term in the optimizer will keep part of the parameters updating even if it has no gradient. We find that scaling the learning rate by the average frequency one parameter will have gradient solves the problem.
+
+
+## Star & Citation
+If you feel this repo is useful, please consider
+starring this project, or citing the paper:
+```
+@misc{videoloop,
+  doi = {10.48550/ARXIV.2303.05312},
+  url = {https://arxiv.org/abs/2303.05312},
+  author = {Ma, Li and Li, Xiaoyu and Liao, Jing and Sander, Pedro V.},
+  title = {3D Video Loops from Asynchronous Input},
+  publisher = {arXiv},
+  year = {2023},
+}
+
+```
