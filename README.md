@@ -27,7 +27,7 @@ pip install -r requirements.txt
 - Install Pytorch3D following the instructures [here](https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md).
 
 ### 2.2 dataset
-Download dataset from the link [here](https://hkustconnect-my.sharepoint.com/:f:/g/personal/lmaag_connect_ust_hk/EiZnIyUYmJdLpQ5hiLtkz8IBfAyeoUiXHt5H0-pFgzV9cg?e=OBNIas). Place them somewhere. For example, you've placed ```fall2720p``` in ```<data_dir>/fall2720p```.
+Download dataset from the link [here](https://drive.google.com/drive/folders/1sWH2thQgW_aZGRHGtSoEZ6ZN9s0PManK?usp=sharing). Place them somewhere. For example, you've placed ```fall2720p``` in ```<data_dir>/fall2720p```.
 
 ### 2.3 config path
 In the ```configs/mpi_base.txt``` and ```configs/mpv_base.txt```, change the ```prefix``` dir to ```<data_dir>```. 
